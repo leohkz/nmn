@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iHealth模擬器 - UI終極修復版</title>
+    <style>
+        :root {
+            --bg-color: #f0f0f2;
+            --dot-color: #c0c0c5;
+            --text-color: #1d1d1f;
+            --card-bg: #ffffff;
+            --line-color: #98989d;
+            --btn-primary: #0071e3;
+            --btn-hover: #0077ed;
+            --node-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            
+            --tag-l1: #e5e7eb; --tag-l1-text: #6b7280;
+            --tag-l2: #dbeafe; --tag-l2-text: #1e40af;
+            --tag-l3: #dcfce7; --tag-l3-text: #166534;
+            --tag-l4: #fce7f3; --tag-l4-text: #9d174d;
+
+            --fab-bg: #ffffff;
+            --fab-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            
+            --bv-tag-bg: #fff7ed;
+            --bv-tag-border: #fdba74;
+            --bv-tag-text: #c2410c;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #1c1c1e;
+            --dot-color: #333333;
+            --text-color: #f5f5f7;
+            --card-bg: #2c2c2e;
+            --line-color: #555558;
+            --btn-primary: #0a84ff;
+            --node-shadow: 0 6px 16px rgba(0,0,0,0.4);
+            --tag-l1: #3a3a3c; --tag-l1-text: #9ca3af;
+            --tag-l2: #1e3a8a; --tag-l2-text: #93c5fd;
+            --tag-l3: #14532d; --tag-l3-text: #86efac;
+            --tag-l4: #831843; --tag-l4-text: #fbcfe8;
+            --fab-bg: #3a3a3c;
+
+            --bv-tag-bg: #431407;
+            --bv-tag-border: #9a3412;
+            --bv-tag-text: #fdba74;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(var(--dot-color) 2px, transparent 2px);
+            background-size: 24px 24px;
+            color: var(--text-color);
+            margin: 0; padding: 0; overflow: hidden; height: 100vh; display: flex; user-select: none;
+        }
+
+        /* FAB & Panel */
+        .settings-fab {
+            position: fixed; top: 20px; left: 20px; width: 48px; height: 48px;
+            background-color: var(--fab-bg); border-radius: 50%; box-shadow: var(--fab-shadow);
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            z-index: 200; font-size: 24px; border: 1px solid var(--line-color); color: var(--text-color);
+            transition: transform 0.2s;
+        }
+        .settings-fab:hover { transform: rotate(90deg); }
+
+        .settings-panel {
+            position: fixed; top: 0; left: 0; height: 100vh; width: 280px;
+            background-color: var(--card-bg); box-shadow: 4px 0 24px rgba(0,0,0,0.2);
+            z-index: 199; transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 80px 24px 24px 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
+        }
+        .settings-panel.open { transform: translateX(0); }
+        .panel-title { font-size: 1.4rem; font-weight: 700; margin-bottom: 8px; color: var(--text-color); }
+        
+        .panel-btn, .file-upload-label {
+            background-color: var(--bg-color); border: 1px solid var(--line-color); color: var(--text-color);
+            padding: 12px; border-radius: 12px; cursor: pointer; font-size: 1rem; text-align: center;
+            transition: all 0.2s; display: block; width: 100%; box-sizing: border-box;
+        }
+        .panel-btn:hover, .file-upload-label:hover { background-color: var(--line-color); border-color: var(--btn-primary); }
+        
+        .calc-btn { background-color: var(--btn-primary); color: white; border: none; font-weight: 600; }
+        .calc-btn:hover { opacity: 0.9; background-color: var(--btn-primary); }
+        
+        .danger-btn { background-color: #fee2e2; color: #ef4444; border: 1px solid #fca5a5; }
+        .danger-btn:hover { background-color: #fecaca; }
+
+        #fileInput { display: none; }
+
+        /* Viewport */
+        .tree-container { flex: 1; width: 100%; height: 100%; overflow: hidden; cursor: grab; position: relative; }
+        .tree-container:active { cursor: grabbing; }
+        .pan-layer { position: absolute; top: 0; left: 0; width: max-content; padding: 100px; transform-origin: 0 0; transition: transform 0.1s linear; }
+
+        /* Tree Lines */
+        .tree { display: flex; flex-direction: column; align-items: center; }
+        .node-wrapper { display: flex; flex-direction: column; align-items: center; position: relative; margin: 0 8px; }
+        .children-container { display: flex; flex-direction: row; justify-content: center; padding-top: 36px; position: relative; }
+        .children-container::before { content: ''; position: absolute; top: 0; left: 50%; width: 2px; height: 36px; background-color: var(--line-color); transform: translateX(-50%); }
+        .branch { display: flex; flex-direction: column; align-items: center; position: relative; padding: 0 8px; }
+        .branch::before { content: ''; position: absolute; top: 0; left: 0; width: 50%; height: 2px; background-color: var(--line-color); }
+        .branch::after { content: ''; position: absolute; top: 0; right: 0; width: 50%; height: 2px; background-color: var(--line-color); }
+        .branch:first-child::before { display: none; }
+        .branch:last-child::after { display: none; }
+        .branch-content { display: flex; flex-direction: column; align-items: center; position: relative; padding-top: 36px; }
+        .branch-content::before { content: ''; position: absolute; top: 0; left: 50%; width: 2px; height: 36px; background-color: var(--line-color); transform: translateX(-50%); }
+
+        /* BV Tags - 絕對置中，強制不換行，解決分離問題 */
+        .line-bv-tag {
+            position: absolute; 
+            top: -12px;  /* 稍微上移 */
+            background-color: var(--bv-tag-bg);
+            border: 1px solid var(--bv-tag-border); 
+            color: var(--bv-tag-text);
+            font-size: 0.65rem; 
+            font-weight: 700; 
+            padding: 3px 8px;
+            border-radius: 12px;
+            z-index: 999; /* 確保在最上層 */
+            white-space: nowrap; /* 禁止換行 */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            
+            /* 使用 transform 進行絕對置中，不依賴 left/right: 50% 的差異 */
+            left: 50%;
+            transform: translateX(-50%);
+            display: inline-block;
+        }
+
+        /* 
+           由於使用了統一的 left:50% + transform:translateX(-50%)
+           我們不再需要針對 first-child / last-child 做不同的定位
+           因為標籤是掛在 branch 上，而 branch 本身的寬度包含了線條
+           這能確保標籤永遠在該分支的正中央
+        */
+
+        /* Node Card */
+        .node-card {
+            background-color: var(--card-bg); border: 2px solid var(--line-color); border-radius: 12px;
+            padding: 16px 8px 10px 8px; width: 120px; height: 190px;
+            box-shadow: var(--node-shadow); position: relative; z-index: 2; transition: all 0.2s;
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+        }
+        .node-card:hover { box-shadow: 0 10px 24px rgba(0,0,0,0.15); border-color: var(--btn-primary); z-index: 10; }
+
+        .delete-btn {
+            position: absolute; top: -10px; right: -10px; width: 24px; height: 24px;
+            background: #ff3b30; color: white; border-radius: 50%; font-size: 14px; line-height: 24px;
+            text-align: center; cursor: pointer; opacity: 0; transform: scale(0.8); transition: all 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 20;
+        }
+        .sponsor-btn {
+            position: absolute; top: -10px; left: -10px; width: 24px; height: 24px;
+            background: var(--btn-primary); color: white; border-radius: 50%; font-size: 12px; 
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; opacity: 0; transform: scale(0.8); transition: all 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 20;
+        }
+        .node-card:hover .delete-btn, .node-card:hover .sponsor-btn { opacity: 1; transform: scale(1); }
+
+        .sponsor-label {
+            position: absolute; top: 4px; left: 6px; font-size: 0.65rem;
+            color: var(--text-color); opacity: 0.6; font-weight: 600; pointer-events: none;
+        }
+
+        .avatar-circle {
+            width: 36px; height: 36px; border-radius: 50%; background-color: var(--bg-color);
+            border: 1px solid var(--line-color); display: flex; align-items: center; justify-content: center;
+            font-size: 1rem; color: #888; font-weight: bold; margin-top: 4px;
+        }
+
+        .node-name-input {
+            width: 100%; border: none; background: transparent; font-size: 0.9rem; font-weight: 700;
+            text-align: center; color: var(--text-color); outline: none; border-bottom: 1px dashed transparent;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0;
+        }
+        .node-name-input:focus { border-bottom-color: var(--btn-primary); }
+
+        .node-userid-input {
+            width: 100%; border: none; background: transparent; font-size: 0.7rem; font-weight: 400;
+            text-align: center; color: var(--text-color); outline: none; opacity: 0.7;
+            font-family: monospace; letter-spacing: 0.5px; margin-bottom: 2px;
+        }
+        .node-userid-input:focus { opacity: 1; color: var(--btn-primary); }
+
+        .node-level-select {
+            width: 90%; border: none; border-radius: 4px; padding: 4px 0; font-size: 0.75rem;
+            text-align: center; text-align-last: center; cursor: pointer; outline: none; font-weight: 700;
+            appearance: none; color: inherit; margin-top: auto;
+        }
+        .node-card[data-level="L1"] .node-level-select { background-color: var(--tag-l1); color: var(--tag-l1-text); }
+        .node-card[data-level="L2"] .node-level-select { background-color: var(--tag-l2); color: var(--tag-l2-text); }
+        .node-card[data-level="L3"] .node-level-select { background-color: var(--tag-l3); color: var(--tag-l3-text); }
+        .node-card[data-level="L4"] .node-level-select { background-color: var(--tag-l4); color: var(--tag-l4-text); }
+
+        .node-stats {
+            width: 100%; background-color: var(--bg-color); border-radius: 8px;
+            padding: 6px 4px; display: flex; flex-direction: column; gap: 2px; font-size: 0.7rem; box-sizing: border-box; margin-top: 6px;
+        }
+        .stat-row { display: flex; justify-content: space-between; align-items: center; }
+        .stat-label { opacity: 0.7; }
+        .stat-value { font-weight: 700; font-family: monospace; }
+        .stat-cash { color: #10b981; } .stat-bv { color: #f59e0b; } .stat-card { color: #8b5cf6; }
+
+        .add-btn {
+            width: 54px; height: 54px; border-radius: 50%; border: 3px dashed var(--line-color);
+            background: transparent; color: var(--line-color); font-size: 32px; display: flex;
+            align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; margin-top: 10px;
+        }
+        .add-btn:hover {
+            border-color: var(--btn-primary); color: var(--btn-primary);
+            background-color: var(--card-bg); transform: scale(1.1); box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5);
+            display: flex; align-items: center; justify-content: center; z-index: 300; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .modal-overlay.open { opacity: 1; pointer-events: auto; }
+        .modal {
+            background: var(--card-bg); padding: 20px; border-radius: 12px; width: 340px; 
+            max-height: 80vh; display: flex; flex-direction: column;
+        }
+        .modal-title { font-size: 1.1rem; font-weight: bold; margin-bottom: 10px; }
+        .node-list { flex: 1; overflow-y: auto; border: 1px solid var(--line-color); border-radius: 8px; margin-bottom: 10px; }
+        .node-list-item {
+            padding: 10px; border-bottom: 1px solid var(--line-color); cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+        }
+        .node-list-item:hover { background-color: var(--bg-color); }
+        .node-list-info { display: flex; flex-direction: column; }
+        .node-list-name { font-weight: 600; font-size: 0.95rem; }
+        .node-list-id { font-size: 0.75rem; color: #888; font-family: monospace; }
+        .node-list-level { font-size: 0.8rem; padding: 2px 6px; border-radius: 4px; background: var(--bg-color); border: 1px solid var(--line-color); }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+        .modal-btn { padding: 8px 16px; border-radius: 6px; cursor: pointer; border: 1px solid var(--line-color); background: var(--bg-color); color: var(--text-color); }
+        
+        .save-indicator {
+            font-size: 0.75rem; color: #10b981; margin-top: 8px; text-align: center; height: 1.2em;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="settings-fab" onclick="toggleSettings()">⚙️</div>
+
+    <div class="settings-panel" id="settingsPanel">
+        <div class="panel-title">iHealth 設定</div>
+        <div class="save-indicator" id="saveIndicator"></div>
+        <button class="panel-btn calc-btn" onclick="calculateAndRender()">💰 計算獎金 (規則1)</button>
+        <button class="panel-btn" id="themeToggle">外觀: 自動</button>
+        <button class="panel-btn" onclick="downloadJSON()">下載 JSON</button>
+        <label for="fileInput" class="file-upload-label">導入 JSON</label>
+        <input type="file" id="fileInput" accept=".json" onchange="importJSON(this)">
+        <button class="panel-btn" onclick="resetView()">重置視角</button>
+        <button class="panel-btn danger-btn" onclick="clearAllData()">🗑️ 清除所有數據</button>
+    </div>
+
+    <div class="tree-container" id="viewport">
+        <div class="pan-layer" id="panLayer">
+            <div id="treeRoot" class="tree"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="sponsorModal">
+        <div class="modal">
+            <div class="modal-title">選擇推薦人</div>
+            <div class="node-list" id="nodeListContainer"></div>
+            <div class="modal-actions">
+                <button class="modal-btn" onclick="closeSponsorModal()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const surnames = ["陳", "林", "黃", "張", "李", "王", "吳", "劉", "蔡"];
+        const names = ["大文", "小明", "志豪", "雅婷", "淑芬", "偉雄", "家豪", "怡君"];
+        const STORAGE_KEY = 'iHealth_Tree_Data';
+
+        function getRandomName() {
+            return surnames[Math.floor(Math.random() * surnames.length)] + 
+                   names[Math.floor(Math.random() * names.length)];
+        }
+
+        function generateUserID() {
+            return Math.floor(100000 + Math.random() * 900000).toString();
+        }
+
+        let treeData;
+        let nodesCache = {}; 
+        let parentMap = {}; 
+
+        function initData() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (parsed && parsed.id === 'root') {
+                        treeData = parsed;
+                        return;
+                    }
+                } catch (e) {
+                    console.error('Failed to load saved data', e);
+                }
+            }
+            treeData = {
+                id: 'root',
+                userID: generateUserID(),
+                name: '總店主',
+                level: 'L4',
+                sponsorId: null,
+                pathA: null,
+                pathB: null,
+                rewards: { cash: 0, bv: 0, card: 0, pairing: 0 },
+                totalBvA: 0, 
+                totalBvB: 0
+            };
+        }
+
+        function saveData() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(treeData));
+                showSaveStatus('已儲存');
+            } catch (e) {
+                showSaveStatus('儲存失敗');
+            }
+        }
+
+        function clearAllData() {
+            if (confirm('確定要清除所有數據並重置嗎？')) {
+                localStorage.removeItem(STORAGE_KEY);
+                location.reload();
+            }
+        }
+
+        function showSaveStatus(msg) {
+            const el = document.getElementById('saveIndicator');
+            el.textContent = msg;
+            setTimeout(() => { el.textContent = ''; }, 2000);
+        }
+
+        // --- 核心邏輯: 僅限直接推薦 + 推薦人限制 ---
+        
+        function getNodeBaseBV(level) {
+            if (level === 'L2') return 80;
+            if (level === 'L3') return 500;
+            if (level === 'L4') return 1000;
+            return 0;
+        }
+
+        function getSponsorReward(level) {
+            if (level === 'L2') return { cash: 16, bv: 80, card: 0 };
+            if (level === 'L3') return { cash: 100, bv: 500, card: 100 };
+            if (level === 'L4') return { cash: 200, bv: 1000, card: 200 };
+            return { cash: 0, bv: 0, card: 0 };
+        }
+
+        function collectAllDescendants(startNode, list) {
+            if (!startNode) return;
+            list.push(startNode);
+            collectAllDescendants(startNode.pathA, list);
+            collectAllDescendants(startNode.pathB, list);
+        }
+
+        function calculateBonuses() {
+            resetRewards(treeData);
+            nodesCache = {}; 
+            parentMap = {}; 
+            buildCache(treeData, null); 
+            
+            traverseForSponsorBonus(treeData);
+            calculateDirectSponsorVolume(treeData);
+            calculatePairingBonus(treeData);
+            
+            saveData();
+        }
+
+        function calculateDirectSponsorVolume(rootNode) {
+            const allNodes = Object.values(nodesCache);
+            allNodes.forEach(node => {
+                let leftSubtreeNodes = [];
+                collectAllDescendants(node.pathA, leftSubtreeNodes);
+                let validLeftBV = 0;
+                leftSubtreeNodes.forEach(child => {
+                    if (child.sponsorId === node.id) {
+                        validLeftBV += getNodeBaseBV(child.level);
+                    }
+                });
+                node.totalBvA = validLeftBV;
+
+                let rightSubtreeNodes = [];
+                collectAllDescendants(node.pathB, rightSubtreeNodes);
+                let validRightBV = 0;
+                rightSubtreeNodes.forEach(child => {
+                    if (child.sponsorId === node.id) {
+                        validRightBV += getNodeBaseBV(child.level);
+                    }
+                });
+                node.totalBvB = validRightBV;
+            });
+        }
+
+        function calculatePairingBonus(node) {
+            if (!node) return;
+            const pairVolume = Math.min(node.totalBvA, node.totalBvB);
+            if (pairVolume > 0) {
+                node.rewards.pairing = Math.round(pairVolume * 0.15 * 100) / 100;
+            }
+            calculatePairingBonus(node.pathA);
+            calculatePairingBonus(node.pathB);
+        }
+
+        function traverseForSponsorBonus(node) {
+            if (!node) return;
+            if (node.sponsorId && nodesCache[node.sponsorId]) {
+                const sponsorNode = nodesCache[node.sponsorId];
+                distributeReferralReward(sponsorNode, node.level);
+            }
+            traverseForSponsorBonus(node.pathA);
+            traverseForSponsorBonus(node.pathB);
+        }
+
+        function buildCache(node, parent) {
+            if (!node) return;
+            nodesCache[node.id] = node;
+            if(parent) parentMap[node.id] = parent;
+            buildCache(node.pathA, node);
+            buildCache(node.pathB, node);
+        }
+
+        function resetRewards(node) {
+            if (!node) return;
+            node.rewards = { cash: 0, bv: 0, card: 0, pairing: 0 };
+            node.totalBvA = 0;
+            node.totalBvB = 0;
+            resetRewards(node.pathA);
+            resetRewards(node.pathB);
+        }
+
+        function distributeReferralReward(sponsorNode, newMemberLevel) {
+            if (sponsorNode.level === 'L1') return;
+            const reward = getSponsorReward(newMemberLevel);
+            sponsorNode.rewards.cash += reward.cash;
+            sponsorNode.rewards.bv += reward.bv;
+            sponsorNode.rewards.card += reward.card;
+        }
+
+        function calculateAndRender() {
+            calculateBonuses();
+            renderTree(false);
+        }
+
+        // --- Interaction: Sponsor Restriction Logic ---
+        let currentSelectingNodeId = null;
+
+        function openSponsorModal(nodeId) {
+            currentSelectingNodeId = nodeId;
+            const container = document.getElementById('nodeListContainer');
+            container.innerHTML = '';
+            
+            nodesCache = {}; parentMap = {};
+            buildCache(treeData, null);
+
+            let validSponsors = [];
+            let curr = nodesCache[nodeId];
+            
+            while(curr && parentMap[curr.id]) {
+                curr = parentMap[curr.id];
+                validSponsors.push(curr);
+            }
+            
+            if (validSponsors.length === 0) {
+                container.innerHTML = '<div style="padding:10px;text-align:center;opacity:0.6;">無可選推薦人 (已是最高層)</div>';
+            } else {
+                validSponsors.forEach(n => {
+                    const item = document.createElement('div');
+                    item.className = 'node-list-item';
+                    item.innerHTML = `
+                        <div class="node-list-info">
+                            <span class="node-list-name">${n.name}</span>
+                            <span class="node-list-id">ID: ${n.userID || '---'}</span>
+                        </div>
+                        <span class="node-list-level">${n.level}</span>
+                    `;
+                    item.onclick = () => setSponsor(n.id);
+                    container.appendChild(item);
+                });
+            }
+
+            document.getElementById('sponsorModal').classList.add('open');
+        }
+
+        function closeSponsorModal() {
+            document.getElementById('sponsorModal').classList.remove('open');
+        }
+
+        function setSponsor(sponsorId) {
+            const node = nodesCache[currentSelectingNodeId];
+            if (node) {
+                node.sponsorId = sponsorId;
+                calculateAndRender();
+            }
+            closeSponsorModal();
+        }
+
+        function getSponsorName(id) {
+            if (!id) return "無";
+            if (nodesCache[id]) return nodesCache[id].name;
+            return "未知";
+        }
+
+        // --- Tree Logic ---
+        const treeRootEl = document.getElementById('treeRoot');
+
+        function findNode(root, id) {
+            if (!root) return null;
+            if (root.id === id) return root;
+            return findNode(root.pathA, id) || findNode(root.pathB, id);
+        }
+
+        function findParent(root, childId) {
+            if (!root) return null;
+            if ((root.pathA && root.pathA.id === childId) || (root.pathB && root.pathB.id === childId)) {
+                return root;
+            }
+            return findParent(root.pathA, childId) || findParent(root.pathB, childId);
+        }
+
+        function updateNodeData(id, key, value) {
+            const node = findNode(treeData, id);
+            if (node) {
+                node[key] = value;
+                if (key === 'level') {
+                    calculateAndRender();
+                } else {
+                    saveData();
+                }
+            }
+        }
+
+        function addNode(parentId, pathKey) {
+            const parent = findNode(treeData, parentId);
+            if (parent) {
+                const newNodeId = Date.now().toString();
+                parent[pathKey] = {
+                    id: newNodeId,
+                    userID: generateUserID(),
+                    name: getRandomName(),
+                    level: 'L4',
+                    sponsorId: parent.id,
+                    pathA: null,
+                    pathB: null,
+                    rewards: { cash: 0, bv: 0, card: 0, pairing: 0 },
+                    totalBvA: 0,
+                    totalBvB: 0
+                };
+                calculateAndRender();
+            }
+        }
+
+        function deleteNode(nodeId) {
+            if(nodeId === 'root') return;
+            if(!confirm("確定刪除？")) return;
+            const parent = findParent(treeData, nodeId);
+            if (parent) {
+                if (parent.pathA && parent.pathA.id === nodeId) parent.pathA = null;
+                else if (parent.pathB && parent.pathB.id === nodeId) parent.pathB = null;
+                calculateAndRender();
+            }
+        }
+
+        // --- Rendering ---
+        function renderTree(centerView = true) {
+            nodesCache = {}; parentMap = {};
+            buildCache(treeData, null);
+            treeRootEl.innerHTML = '';
+            treeRootEl.appendChild(createNodeElement(treeData));
+            if(centerView) setTimeout(resetView, 50);
+        }
+
+        function createNodeElement(nodeData) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'node-wrapper';
+
+            const card = document.createElement('div');
+            card.className = 'node-card';
+            card.setAttribute('data-level', nodeData.level);
+            card.id = `card-${nodeData.id}`;
+
+            if (nodeData.id !== 'root') {
+                const delBtn = document.createElement('div');
+                delBtn.className = 'delete-btn';
+                delBtn.textContent = '×';
+                delBtn.onclick = (e) => { e.stopPropagation(); deleteNode(nodeData.id); };
+                card.appendChild(delBtn);
+
+                const spBtn = document.createElement('div');
+                spBtn.className = 'sponsor-btn';
+                spBtn.innerHTML = '🔗';
+                spBtn.title = '修改推薦人';
+                spBtn.onclick = (e) => { e.stopPropagation(); openSponsorModal(nodeData.id); };
+                card.appendChild(spBtn);
+            }
+
+            if (nodeData.id !== 'root') {
+                const spLabel = document.createElement('div');
+                spLabel.className = 'sponsor-label';
+                spLabel.textContent = `推: ${getSponsorName(nodeData.sponsorId)}`;
+                card.appendChild(spLabel);
+            }
+
+            const avatar = document.createElement('div');
+            avatar.className = 'avatar-circle';
+            avatar.textContent = nodeData.name.charAt(0);
+            card.appendChild(avatar);
+
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.className = 'node-name-input';
+            nameInput.value = nodeData.name;
+            nameInput.oninput = (e) => {
+                updateNodeData(nodeData.id, 'name', e.target.value);
+                avatar.textContent = e.target.value.charAt(0);
+            };
+            card.appendChild(nameInput);
+
+            const idInput = document.createElement('input');
+            idInput.type = 'text';
+            idInput.className = 'node-userid-input';
+            idInput.value = nodeData.userID || '';
+            idInput.placeholder = 'ID';
+            idInput.oninput = (e) => updateNodeData(nodeData.id, 'userID', e.target.value);
+            card.appendChild(idInput);
+
+            const levelSelect = document.createElement('select');
+            levelSelect.className = 'node-level-select';
+            ['L1', 'L2', 'L3', 'L4'].forEach(lvl => {
+                const opt = document.createElement('option');
+                opt.value = lvl; opt.textContent = lvl;
+                if (nodeData.level === lvl) opt.selected = true;
+                levelSelect.appendChild(opt);
+            });
+            levelSelect.onchange = (e) => updateNodeData(nodeData.id, 'level', e.target.value);
+            card.appendChild(levelSelect);
+
+            const statsDiv = document.createElement('div');
+            statsDiv.className = 'node-stats';
+            // 直推獎金
+            statsDiv.innerHTML += `<div class="stat-row"><span class="stat-label">直推獎金</span><span class="stat-value stat-cash">$${nodeData.rewards.cash}</span></div>`;
+            // 積分獎金
+            statsDiv.innerHTML += `<div class="stat-row"><span class="stat-label">積分獎金</span><span class="stat-value stat-bv">$${nodeData.rewards.pairing || 0}</span></div>`;
+            // 產品卡
+            if (nodeData.rewards.card > 0) {
+                statsDiv.innerHTML += `<div class="stat-row"><span class="stat-label">產品卡</span><span class="stat-value stat-card">$${nodeData.rewards.card}</span></div>`;
+            }
+            card.appendChild(statsDiv);
+            wrapper.appendChild(card);
+
+            const childrenContainer = document.createElement('div');
+            childrenContainer.className = 'children-container';
+
+            const branchA = createBranch(nodeData, 'pathA');
+            // 標籤顯示邏輯 (有數值才顯示)
+            if (nodeData.pathA || nodeData.totalBvA > 0) {
+                 const bvTagA = document.createElement('div');
+                 bvTagA.className = 'line-bv-tag';
+                 bvTagA.textContent = `${nodeData.totalBvA} BV`;
+                 branchA.appendChild(bvTagA);
+            }
+            childrenContainer.appendChild(branchA);
+
+            const branchB = createBranch(nodeData, 'pathB');
+            if (nodeData.pathB || nodeData.totalBvB > 0) {
+                 const bvTagB = document.createElement('div');
+                 bvTagB.className = 'line-bv-tag';
+                 bvTagB.textContent = `${nodeData.totalBvB} BV`;
+                 branchB.appendChild(bvTagB);
+            }
+            childrenContainer.appendChild(branchB);
+
+            wrapper.appendChild(childrenContainer);
+            return wrapper;
+        }
+
+        function createBranch(parentNode, pathKey) {
+            const branch = document.createElement('div');
+            branch.className = 'branch';
+            const content = document.createElement('div');
+            content.className = 'branch-content';
+
+            if (parentNode[pathKey]) {
+                content.appendChild(createNodeElement(parentNode[pathKey]));
+            } else {
+                const addBtn = document.createElement('button');
+                addBtn.className = 'add-btn';
+                addBtn.textContent = '+';
+                addBtn.onclick = () => addNode(parentNode.id, pathKey);
+                content.appendChild(addBtn);
+            }
+
+            branch.appendChild(content);
+            return branch;
+        }
+
+        // --- Viewport & Theme ---
+        const viewport = document.getElementById('viewport');
+        const panLayer = document.getElementById('panLayer');
+        const settingsPanel = document.getElementById('settingsPanel');
+        let scale = 1, translateX = 0, translateY = 0, isDragging = false, startX, startY;
+
+        function toggleSettings() { settingsPanel.classList.toggle('open'); }
+        viewport.addEventListener('mousedown', () => { settingsPanel.classList.remove('open'); });
+        function updateTransform() { panLayer.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`; }
+        function resetView() {
+            scale = 1; panLayer.style.transform = `translate(0,0) scale(1)`;
+            translateX = (viewport.clientWidth - panLayer.offsetWidth) / 2; translateY = 40;
+            updateTransform(); settingsPanel.classList.remove('open');
+        }
+        viewport.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const newScale = Math.min(Math.max(0.2, scale + (-e.deltaY) * 0.001), 3);
+            const rect = panLayer.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const ratio = newScale / scale;
+            translateX -= mouseX * (ratio - 1);
+            translateY -= mouseY * (ratio - 1);
+            scale = newScale; updateTransform();
+        }, { passive: false });
+        viewport.addEventListener('mousedown', (e) => {
+            if (['INPUT','SELECT','BUTTON'].includes(e.target.tagName) || e.target.closest('.node-card')) return;
+            isDragging = true; startX = e.clientX - translateX; startY = e.clientY - translateY;
+            viewport.style.cursor = 'grabbing';
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault(); translateX = e.clientX - startX; translateY = e.clientY - startY; updateTransform();
+        });
+        window.addEventListener('mouseup', () => { isDragging = false; viewport.style.cursor = 'grab'; });
+
+        const themeToggleBtn = document.getElementById('themeToggle');
+        const themes = ['auto', 'light', 'dark'];
+        let currentThemeIndex = 0;
+        function applyTheme(t) {
+            document.documentElement.removeAttribute('data-theme');
+            let sys = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            let label = t === 'auto' ? '自動' : (t === 'light' ? '淺色' : '深色');
+            themeToggleBtn.textContent = `外觀: ${label}`;
+            if (t === 'dark' || (t === 'auto' && sys)) document.documentElement.setAttribute('data-theme', 'dark');
+            else document.documentElement.setAttribute('data-theme', 'light');
+        }
+        themeToggleBtn.addEventListener('click', () => {
+            currentThemeIndex = (currentThemeIndex + 1) % themes.length;
+            applyTheme(themes[currentThemeIndex]);
+        });
+
+        function downloadJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2));
+            const a = document.createElement('a');
+            a.href = dataStr; a.download = "iHealth_tree_final_fix.json";
+            document.body.appendChild(a); a.click(); a.remove();
+        }
+        function importJSON(input) {
+            const f = input.files[0]; if(!f) return;
+            const r = new FileReader();
+            r.onload = (e) => {
+                try {
+                    const d = JSON.parse(e.target.result);
+                    const fix = (n) => { 
+                        if(!n) return; 
+                        if(n.userID === undefined) n.userID = generateUserID(); 
+                        if(n.sponsorId === undefined) n.sponsorId = null;
+                        if(n.totalBvA === undefined) n.totalBvA = 0;
+                        if(n.totalBvB === undefined) n.totalBvB = 0;
+                        if(n.rewards.pairing === undefined) n.rewards.pairing = 0;
+                        fix(n.pathA); fix(n.pathB); 
+                    };
+                    fix(d);
+                    treeData = d; calculateAndRender(); input.value = '';
+                } catch(err) { alert('JSON Error'); }
+            };
+            r.readAsText(f);
+        }
+
+        applyTheme('auto');
+        initData();
+        calculateAndRender();
+
+    </script>
+</body>
+</html>
