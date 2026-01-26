@@ -2,9 +2,8 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <!-- 關鍵：禁止瀏覽器默認縮放，完全由我們接管 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>iHealth模擬器 - iPad觸控優化版</title>
+    <title>iHealth模擬器 - iPad極速版</title>
     <style>
         :root {
             --bg-color: #f0f0f2;
@@ -56,8 +55,8 @@
             color: var(--text-color);
             margin: 0; padding: 0; overflow: hidden; height: 100vh; display: flex; 
             user-select: none;
-            -webkit-user-select: none; /* iOS Safari 特有 */
-            touch-action: none; /* 禁用瀏覽器默認手勢 */
+            -webkit-user-select: none;
+            touch-action: none;
         }
 
         /* FAB & Panel */
@@ -97,7 +96,27 @@
         /* Viewport */
         .tree-container { flex: 1; width: 100%; height: 100%; overflow: hidden; cursor: grab; position: relative; }
         .tree-container:active { cursor: grabbing; }
-        .pan-layer { position: absolute; top: 0; left: 0; width: max-content; padding: 100px; transform-origin: 0 0; transition: transform 0.1s linear; }
+        
+        /* 
+           關鍵修正：
+           1. 移除 transition，確保拖曳時無延遲
+           2. 增加 will-change: transform，啟動 GPU 加速
+           3. transform-origin 設為 0 0，簡化計算
+        */
+        .pan-layer { 
+            position: absolute; 
+            top: 0; left: 0; 
+            width: max-content; 
+            padding: 100px; 
+            transform-origin: 0 0; 
+            /* transition: transform 0.1s linear;  <-- 已移除此行 */
+            will-change: transform; 
+        }
+
+        /* 只有在加上這個 class 時才有動畫 (用於重置視角) */
+        .pan-layer.smooth-move {
+            transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
 
         /* Tree Lines */
         .tree { display: flex; flex-direction: column; align-items: center; }
@@ -135,29 +154,29 @@
         .node-card {
             background-color: var(--card-bg); border: 2px solid var(--line-color); border-radius: 12px;
             padding: 16px 8px 10px 8px; width: 120px; height: 190px;
-            box-shadow: var(--node-shadow); position: relative; z-index: 2; transition: all 0.2s;
+            box-shadow: var(--node-shadow); position: relative; z-index: 2; 
+            /* 移除 card 本身的 transition，避免拖曳整個版面時瀏覽器重新計算造成的閃爍，只保留 hover 效果 */
+            /* transition: all 0.2s; */
             display: flex; flex-direction: column; align-items: center; gap: 4px;
         }
-        /* Touch device hover fix */
         .node-card:active { transform: scale(0.98); } 
 
         .delete-btn {
-            position: absolute; top: -10px; right: -10px; width: 28px; height: 28px; /* 加大觸控區域 */
+            position: absolute; top: -10px; right: -10px; width: 28px; height: 28px;
             background: #ff3b30; color: white; border-radius: 50%; font-size: 16px; line-height: 28px;
-            text-align: center; cursor: pointer; opacity: 1; /* iPad 上常駐顯示比較好操作 */
+            text-align: center; cursor: pointer; opacity: 1;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 20;
         }
         .sponsor-btn {
-            position: absolute; top: -10px; left: -10px; width: 28px; height: 28px; /* 加大觸控區域 */
+            position: absolute; top: -10px; left: -10px; width: 28px; height: 28px; 
             background: var(--btn-primary); color: white; border-radius: 50%; font-size: 14px; 
             display: flex; align-items: center; justify-content: center;
-            cursor: pointer; opacity: 1; /* iPad 上常駐顯示 */
+            cursor: pointer; opacity: 1; 
             box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 20;
         }
         
-        /* 在桌面端才使用 hover 顯示按鈕 */
         @media (hover: hover) {
-            .delete-btn, .sponsor-btn { opacity: 0; transform: scale(0.8); transition: all 0.2s; }
+            .delete-btn, .sponsor-btn { opacity: 0; transform: scale(0.8); transition: opacity 0.2s, transform 0.2s; }
             .node-card:hover .delete-btn, .node-card:hover .sponsor-btn { opacity: 1; transform: scale(1); }
         }
 
@@ -228,7 +247,7 @@
         .modal-title { font-size: 1.1rem; font-weight: bold; margin-bottom: 10px; }
         .node-list { flex: 1; overflow-y: auto; border: 1px solid var(--line-color); border-radius: 8px; margin-bottom: 10px; }
         .node-list-item {
-            padding: 12px 10px; /* 加大點擊區 */
+            padding: 12px 10px;
             border-bottom: 1px solid var(--line-color); cursor: pointer; display: flex; justify-content: space-between; align-items: center;
         }
         .node-list-item:active { background-color: var(--bg-color); }
@@ -343,7 +362,6 @@
             setTimeout(() => { el.textContent = ''; }, 2000);
         }
 
-        // --- 核心邏輯: 僅限直接推薦 + 推薦人限制 ---
         function getNodeBaseBV(level) {
             if (level === 'L2') return 80;
             if (level === 'L3') return 500;
@@ -453,7 +471,6 @@
             renderTree(false);
         }
 
-        // --- Interaction: Sponsor Restriction Logic ---
         let currentSelectingNodeId = null;
 
         function openSponsorModal(nodeId) {
@@ -512,7 +529,6 @@
             return "未知";
         }
 
-        // --- Tree Logic ---
         const treeRootEl = document.getElementById('treeRoot');
 
         function findNode(root, id) {
@@ -572,7 +588,6 @@
             }
         }
 
-        // --- Rendering ---
         function renderTree(centerView = true) {
             nodesCache = {}; parentMap = {};
             buildCache(treeData, null);
@@ -594,10 +609,7 @@
                 const delBtn = document.createElement('div');
                 delBtn.className = 'delete-btn';
                 delBtn.textContent = '×';
-                
-                // 觸控事件阻止冒泡，防止誤觸發拖曳
                 delBtn.ontouchstart = (e) => e.stopPropagation();
-                
                 delBtn.onclick = (e) => { e.stopPropagation(); deleteNode(nodeData.id); };
                 card.appendChild(delBtn);
 
@@ -605,9 +617,7 @@
                 spBtn.className = 'sponsor-btn';
                 spBtn.innerHTML = '🔗';
                 spBtn.title = '修改推薦人';
-                
                 spBtn.ontouchstart = (e) => e.stopPropagation();
-
                 spBtn.onclick = (e) => { e.stopPropagation(); openSponsorModal(nodeData.id); };
                 card.appendChild(spBtn);
             }
@@ -632,7 +642,6 @@
                 updateNodeData(nodeData.id, 'name', e.target.value);
                 avatar.textContent = e.target.value.charAt(0);
             };
-            // 輸入時防止拖曳
             nameInput.ontouchstart = (e) => e.stopPropagation();
             card.appendChild(nameInput);
 
@@ -705,7 +714,7 @@
                 addBtn.className = 'add-btn';
                 addBtn.textContent = '+';
                 addBtn.onclick = () => addNode(parentNode.id, pathKey);
-                addBtn.ontouchstart = (e) => e.stopPropagation(); // 防止誤觸拖曳
+                addBtn.ontouchstart = (e) => e.stopPropagation();
                 content.appendChild(addBtn);
             }
 
@@ -713,14 +722,11 @@
             return branch;
         }
 
-        // --- Viewport & Gesture Control (Mouse + Touch) ---
         const viewport = document.getElementById('viewport');
         const panLayer = document.getElementById('panLayer');
         const settingsPanel = document.getElementById('settingsPanel');
         let scale = 1, translateX = 0, translateY = 0;
         let isDragging = false, startX, startY;
-        
-        // Touch variables
         let initialPinchDistance = null;
         let lastScale = 1;
 
@@ -734,17 +740,23 @@
         
         function resetView() {
             scale = 1; lastScale = 1;
+            // 臨時加入動畫 class
+            panLayer.classList.add('smooth-move');
             panLayer.style.transform = `translate(0,0) scale(1)`;
             translateX = (viewport.clientWidth - panLayer.offsetWidth) / 2; translateY = 40;
-            updateTransform(); settingsPanel.classList.remove('open');
+            updateTransform();
+            settingsPanel.classList.remove('open');
+            // 動畫結束後移除 class，恢復極速響應
+            setTimeout(() => {
+                panLayer.classList.remove('smooth-move');
+            }, 300);
         }
 
-        // --- Mouse Events ---
         viewport.addEventListener('wheel', (e) => {
             e.preventDefault();
+            panLayer.classList.remove('smooth-move'); // 確保手動操作時沒有延遲
             const newScale = Math.min(Math.max(0.2, scale + (-e.deltaY) * 0.001), 3);
             const rect = panLayer.getBoundingClientRect();
-            // Zoom towards mouse
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
             const ratio = newScale / scale;
@@ -755,6 +767,7 @@
 
         viewport.addEventListener('mousedown', (e) => {
             if (['INPUT','SELECT','BUTTON'].includes(e.target.tagName) || e.target.closest('.node-card')) return;
+            panLayer.classList.remove('smooth-move');
             isDragging = true; startX = e.clientX - translateX; startY = e.clientY - translateY;
             viewport.style.cursor = 'grabbing';
         });
@@ -766,53 +779,42 @@
 
         window.addEventListener('mouseup', () => { isDragging = false; viewport.style.cursor = 'grab'; });
 
-        // --- Touch Events (iPad Support) ---
-        
-        function getDistance(touches) {
-            const dx = touches[0].clientX - touches[1].clientX;
-            const dy = touches[0].clientY - touches[1].clientY;
-            return Math.sqrt(dx * dx + dy * dy);
-        }
-
+        // --- Touch Events (Fix for Ghosting) ---
         viewport.addEventListener('touchstart', (e) => {
             if (e.target.closest('input') || e.target.closest('select') || e.target.closest('button')) return;
-            
+            panLayer.classList.remove('smooth-move'); // 關鍵：觸摸開始時移除任何過渡效果
+
             if (e.touches.length === 1) {
-                // Single finger drag
                 isDragging = true;
                 startX = e.touches[0].clientX - translateX;
                 startY = e.touches[0].clientY - translateY;
             } else if (e.touches.length === 2) {
-                // Two finger pinch
                 isDragging = false;
-                initialPinchDistance = getDistance(e.touches);
+                initialPinchDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
                 lastScale = scale;
             }
         }, { passive: false });
 
         viewport.addEventListener('touchmove', (e) => {
-            e.preventDefault(); // Prevent default scroll/zoom
-
+            e.preventDefault(); 
             if (e.touches.length === 1 && isDragging) {
                 translateX = e.touches[0].clientX - startX;
                 translateY = e.touches[0].clientY - startY;
-                updateTransform();
+                // 直接更新 Style，因為已經移除了 CSS transition，這裡會是即時的
+                panLayer.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
             } else if (e.touches.length === 2 && initialPinchDistance) {
-                const currentDistance = getDistance(e.touches);
+                const currentDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
                 const zoomFactor = currentDistance / initialPinchDistance;
-                
-                // Calculate new scale with limits
                 let newScale = lastScale * zoomFactor;
                 newScale = Math.min(Math.max(0.2, newScale), 3);
-                
-                // Simple center zoom for touch (easier to control on iPad)
-                // If you want precise pinch-point zoom, logic is more complex, 
-                // but center zoom is usually fine for diagramming.
-                
-                // Optional: Adjust translate to zoom towards center between fingers
-                // For now, updating scale is enough for basic pinch zoom
                 scale = newScale;
-                updateTransform();
+                panLayer.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
             }
         }, { passive: false });
 
@@ -843,7 +845,7 @@
         function downloadJSON() {
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2));
             const a = document.createElement('a');
-            a.href = dataStr; a.download = "iHealth_tree_ipad_ready.json";
+            a.href = dataStr; a.download = "iHealth_tree_v13_fast.json";
             document.body.appendChild(a); a.click(); a.remove();
         }
         function importJSON(input) {
