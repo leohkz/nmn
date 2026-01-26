@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>iHealth模擬器 - iPad長按優化版</title>
+    <title>iHealth模擬器 - iPad完美縮放版</title>
     <style>
         :root {
             --bg-color: #f0f0f2;
@@ -20,9 +20,6 @@
             --tag-l3: #dcfce7; --tag-l3-text: #166534;
             --tag-l4: #fce7f3; --tag-l4-text: #9d174d;
 
-            --fab-bg: #ffffff;
-            --fab-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            
             --bv-tag-bg: #fff7ed;
             --bv-tag-border: #fdba74;
             --bv-tag-text: #c2410c;
@@ -147,11 +144,9 @@
             padding: 16px 8px 10px 8px; width: 120px; height: 190px;
             box-shadow: var(--node-shadow); position: relative; z-index: 2; 
             display: flex; flex-direction: column; align-items: center; gap: 4px;
-            /* 讓長按時有一點點放大效果 */
             transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         
-        /* 編輯模式 (Long pressed) 樣式 */
         .node-card.edit-mode {
             z-index: 100;
             border-color: var(--btn-primary);
@@ -175,16 +170,13 @@
             opacity: 0; transform: scale(0.5); pointer-events: none; transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
-        /* Desktop Hover: 依然保留滑鼠移過去就顯示的功能 */
         @media (hover: hover) {
             .node-card:hover .delete-btn, .node-card:hover .sponsor-btn { opacity: 1; transform: scale(1); pointer-events: auto; }
         }
 
-        /* Mobile/iPad: 只有在 .edit-mode 下才顯示按鈕 */
         .node-card.edit-mode .delete-btn, .node-card.edit-mode .sponsor-btn {
             opacity: 1; transform: scale(1); pointer-events: auto;
         }
-
 
         .sponsor-label {
             position: absolute; top: 4px; left: 6px; font-size: 0.65rem;
@@ -302,6 +294,7 @@
     </div>
 
     <script>
+        // ... (Data structure and logic remains same) ...
         const surnames = ["陳", "林", "黃", "張", "李", "王", "吳", "劉", "蔡"];
         const names = ["大文", "小明", "志豪", "雅婷", "淑芬", "偉雄", "家豪", "怡君"];
         const STORAGE_KEY = 'iHealth_Tree_Data';
@@ -477,6 +470,7 @@
             renderTree(false);
         }
 
+        // --- Interaction ---
         let currentSelectingNodeId = null;
 
         function openSponsorModal(nodeId) {
@@ -602,34 +596,25 @@
             if(centerView) setTimeout(resetView, 50);
         }
 
-        // --- Long Press Logic Helper ---
+        // --- Long Press Logic ---
         function attachLongPress(element, callback) {
             let timer;
-            
             const start = (e) => {
-                // 如果已經是編輯模式，點擊應該是取消編輯，而不是重啟長按
                 if (element.classList.contains('edit-mode')) return;
-                
                 timer = setTimeout(() => {
                     callback();
-                    // 可選：震動回饋 (Android only, iOS Safari 不支援)
                     if (navigator.vibrate) navigator.vibrate(50); 
-                }, 600); // 600ms 長按觸發
+                }, 600); 
             };
-            
-            const cancel = () => {
-                clearTimeout(timer);
-            };
-
+            const cancel = () => { clearTimeout(timer); };
             element.addEventListener('touchstart', start, {passive: true});
             element.addEventListener('touchend', cancel);
-            element.addEventListener('touchmove', cancel); // 手指移動就取消長按
-            element.addEventListener('mousedown', start); // 也支援滑鼠長按
+            element.addEventListener('touchmove', cancel); 
+            element.addEventListener('mousedown', start); 
             element.addEventListener('mouseup', cancel);
             element.addEventListener('mouseleave', cancel);
         }
 
-        // 全局點擊：取消所有卡片的編輯模式
         document.addEventListener('touchstart', (e) => {
             if (!e.target.closest('.node-card')) {
                 document.querySelectorAll('.node-card.edit-mode').forEach(el => el.classList.remove('edit-mode'));
@@ -650,9 +635,7 @@
             card.setAttribute('data-level', nodeData.level);
             card.id = `card-${nodeData.id}`;
 
-            // 綁定長按事件
             attachLongPress(card, () => {
-                // 先關閉其他卡片的編輯模式（單選邏輯）
                 document.querySelectorAll('.node-card.edit-mode').forEach(el => el.classList.remove('edit-mode'));
                 card.classList.add('edit-mode');
             });
@@ -774,13 +757,20 @@
             return branch;
         }
 
+        // --- Viewport & Gesture Control (Center Zoom Logic) ---
         const viewport = document.getElementById('viewport');
         const panLayer = document.getElementById('panLayer');
         const settingsPanel = document.getElementById('settingsPanel');
         let scale = 1, translateX = 0, translateY = 0;
         let isDragging = false, startX, startY;
-        let initialPinchDistance = null;
-        let lastScale = 1;
+        
+        // Touch Variables for Center Zoom
+        let startDist = 0;
+        let startScale = 1;
+        let startCenterX = 0;
+        let startCenterY = 0;
+        let startTranslateX = 0;
+        let startTranslateY = 0;
 
         function toggleSettings() { settingsPanel.classList.toggle('open'); }
         viewport.addEventListener('mousedown', () => { settingsPanel.classList.remove('open'); });
@@ -791,7 +781,7 @@
         }
         
         function resetView() {
-            scale = 1; lastScale = 1;
+            scale = 1; 
             panLayer.classList.add('smooth-move');
             panLayer.style.transform = `translate(0,0) scale(1)`;
             translateX = (viewport.clientWidth - panLayer.offsetWidth) / 2; translateY = 40;
@@ -800,11 +790,13 @@
             setTimeout(() => { panLayer.classList.remove('smooth-move'); }, 300);
         }
 
+        // Mouse Wheel Zoom
         viewport.addEventListener('wheel', (e) => {
             e.preventDefault();
             panLayer.classList.remove('smooth-move');
             const newScale = Math.min(Math.max(0.2, scale + (-e.deltaY) * 0.001), 3);
             const rect = panLayer.getBoundingClientRect();
+            // Zoom towards mouse
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
             const ratio = newScale / scale;
@@ -813,6 +805,7 @@
             scale = newScale; updateTransform();
         }, { passive: false });
 
+        // Mouse Drag
         viewport.addEventListener('mousedown', (e) => {
             if (['INPUT','SELECT','BUTTON'].includes(e.target.tagName) || e.target.closest('.node-card')) return;
             panLayer.classList.remove('smooth-move');
@@ -827,50 +820,78 @@
 
         window.addEventListener('mouseup', () => { isDragging = false; viewport.style.cursor = 'grab'; });
 
-        // --- Touch Events ---
+        // --- Touch Events (Center Zoom Implementation) ---
+        
+        function getDistance(touches) {
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function getCenter(touches) {
+            return {
+                x: (touches[0].clientX + touches[1].clientX) / 2,
+                y: (touches[0].clientY + touches[1].clientY) / 2
+            };
+        }
+
         viewport.addEventListener('touchstart', (e) => {
             if (e.target.closest('input') || e.target.closest('select') || e.target.closest('button')) return;
             panLayer.classList.remove('smooth-move');
 
             if (e.touches.length === 1) {
-                // 如果按在卡片上，不觸發拖曳（讓長按生效），除非使用者真的開始移動
-                // 但為了簡單體驗，如果長按沒有觸發，移動也會帶動背景
+                // Single finger pan
                 isDragging = true;
                 startX = e.touches[0].clientX - translateX;
                 startY = e.touches[0].clientY - translateY;
             } else if (e.touches.length === 2) {
+                // Two finger pinch start
                 isDragging = false;
-                initialPinchDistance = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
-                lastScale = scale;
+                startDist = getDistance(e.touches);
+                startScale = scale;
+                const center = getCenter(e.touches);
+                startCenterX = center.x;
+                startCenterY = center.y;
+                startTranslateX = translateX;
+                startTranslateY = translateY;
             }
         }, { passive: false });
 
         viewport.addEventListener('touchmove', (e) => {
             e.preventDefault(); 
+            
             if (e.touches.length === 1 && isDragging) {
+                // Pan logic
                 translateX = e.touches[0].clientX - startX;
                 translateY = e.touches[0].clientY - startY;
-                panLayer.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
-            } else if (e.touches.length === 2 && initialPinchDistance) {
-                const currentDistance = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
-                const zoomFactor = currentDistance / initialPinchDistance;
-                let newScale = lastScale * zoomFactor;
-                newScale = Math.min(Math.max(0.2, newScale), 3);
+                updateTransform();
+            } else if (e.touches.length === 2) {
+                // Center Zoom Logic
+                const currDist = getDistance(e.touches);
+                const currCenter = getCenter(e.touches);
+
+                // Calculate new scale based on distance ratio
+                let newScale = startScale * (currDist / startDist);
+                // Clamp scale limits
+                newScale = Math.min(Math.max(0.2, newScale), 5);
+
+                // Formula: T_new = C_curr - (C_start - T_start) * (S_new / S_start)
+                // This keeps the point under the fingers static relative to the fingers
+                const scaleRatio = newScale / startScale;
+
+                translateX = currCenter.x - (startCenterX - startTranslateX) * scaleRatio;
+                translateY = currCenter.y - (startCenterY - startTranslateY) * scaleRatio;
+                
                 scale = newScale;
-                panLayer.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+                updateTransform();
             }
         }, { passive: false });
 
         viewport.addEventListener('touchend', (e) => {
             isDragging = false;
             if (e.touches.length < 2) {
-                initialPinchDistance = null;
+                // Reset pinch tracking if fingers lift
+                startDist = 0;
             }
         });
 
@@ -894,7 +915,7 @@
         function downloadJSON() {
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2));
             const a = document.createElement('a');
-            a.href = dataStr; a.download = "iHealth_tree_v14_longpress.json";
+            a.href = dataStr; a.download = "iHealth_tree_v15_center_zoom.json";
             document.body.appendChild(a); a.click(); a.remove();
         }
         function importJSON(input) {
