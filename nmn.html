@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>iHealth模擬器 - iPad完美縮放版</title>
+    <title>iHealth模擬器 - 統計儀表板版</title>
     <style>
         :root {
             --bg-color: #f0f0f2;
@@ -20,9 +20,15 @@
             --tag-l3: #dcfce7; --tag-l3-text: #166534;
             --tag-l4: #fce7f3; --tag-l4-text: #9d174d;
 
+            --fab-bg: #ffffff;
+            --fab-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            
             --bv-tag-bg: #fff7ed;
             --bv-tag-border: #fdba74;
             --bv-tag-text: #c2410c;
+
+            --stats-bg: rgba(255, 255, 255, 0.85);
+            --stats-border: #e5e5e5;
         }
 
         [data-theme="dark"] {
@@ -42,6 +48,9 @@
             --bv-tag-bg: #431407;
             --bv-tag-border: #9a3412;
             --bv-tag-text: #fdba74;
+
+            --stats-bg: rgba(44, 44, 46, 0.85);
+            --stats-border: #3a3a3c;
         }
 
         body {
@@ -56,9 +65,12 @@
             touch-action: none;
         }
 
-        /* FAB & Panel */
+        /* FAB (Settings Button) - Moved to Bottom Left */
         .settings-fab {
-            position: fixed; top: 20px; left: 20px; width: 48px; height: 48px;
+            position: fixed; 
+            bottom: 50px; /* 位於統計列上方 */
+            left: 20px; 
+            width: 48px; height: 48px;
             background-color: var(--fab-bg); border-radius: 50%; box-shadow: var(--fab-shadow);
             display: flex; align-items: center; justify-content: center; cursor: pointer;
             z-index: 200; font-size: 24px; border: 1px solid var(--line-color); color: var(--text-color);
@@ -66,11 +78,38 @@
         }
         .settings-fab:hover { transform: rotate(90deg); }
 
+        /* Stats Bar - Bottom Fixed */
+        .stats-bar {
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            height: 36px; /* 極度壓縮高度 */
+            background-color: var(--stats-bg);
+            border-top: 1px solid var(--stats-border);
+            backdrop-filter: blur(10px); /* 毛玻璃效果 */
+            -webkit-backdrop-filter: blur(10px);
+            display: flex; align-items: center; justify-content: space-around;
+            z-index: 198; /* 略低於面板 */
+            font-size: 0.75rem;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+            padding: 0 10px; box-sizing: border-box;
+            white-space: nowrap; overflow-x: auto; /* 小螢幕可滑動 */
+        }
+        
+        .stat-item {
+            display: flex; align-items: center; gap: 6px; color: var(--text-color); opacity: 0.9;
+        }
+        .stat-item strong {
+            font-family: monospace; font-size: 0.85rem; color: var(--btn-primary);
+        }
+        .stat-divider {
+            width: 1px; height: 14px; background-color: var(--line-color); opacity: 0.3;
+        }
+
         .settings-panel {
             position: fixed; top: 0; left: 0; height: 100vh; width: 280px;
             background-color: var(--card-bg); box-shadow: 4px 0 24px rgba(0,0,0,0.2);
             z-index: 199; transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            padding: 80px 24px 24px 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
+            padding: 40px 24px 80px 24px; /* 底部留白給 FAB */
+            box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
         }
         .settings-panel.open { transform: translateX(0); }
         .panel-title { font-size: 1.4rem; font-weight: 700; margin-bottom: 8px; color: var(--text-color); }
@@ -91,7 +130,7 @@
         #fileInput { display: none; }
 
         /* Viewport */
-        .tree-container { flex: 1; width: 100%; height: 100%; overflow: hidden; cursor: grab; position: relative; }
+        .tree-container { flex: 1; width: 100%; height: 100%; overflow: hidden; cursor: grab; position: relative; padding-bottom: 40px; /* 避開底部統計列 */ }
         .tree-container:active { cursor: grabbing; }
         .pan-layer { 
             position: absolute; 
@@ -283,6 +322,17 @@
         </div>
     </div>
 
+    <!-- 底部統計列 -->
+    <div class="stats-bar" id="statsBar">
+        <div class="stat-item">總人數: <strong id="statCount">0</strong></div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">最大層數: <strong id="statDepth">0</strong></div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">L4 店主: <strong id="statL4">0</strong></div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">總發獎金: <strong id="statPayout" style="color:#10b981;">$0</strong></div>
+    </div>
+
     <div class="modal-overlay" id="sponsorModal">
         <div class="modal">
             <div class="modal-title">選擇推薦人</div>
@@ -294,7 +344,7 @@
     </div>
 
     <script>
-        // ... (Data structure and logic remains same) ...
+        // ... Data logic ...
         const surnames = ["陳", "林", "黃", "張", "李", "王", "吳", "劉", "蔡"];
         const names = ["大文", "小明", "志豪", "雅婷", "淑芬", "偉雄", "家豪", "怡君"];
         const STORAGE_KEY = 'iHealth_Tree_Data';
@@ -361,6 +411,38 @@
             setTimeout(() => { el.textContent = ''; }, 2000);
         }
 
+        // --- Stats Calculation ---
+        function calculateGlobalStats() {
+            let totalMembers = 0;
+            let maxDepth = 0;
+            let totalPayout = 0;
+            let totalL4 = 0;
+
+            function traverse(node, currentDepth) {
+                if (!node) return;
+                
+                totalMembers++;
+                if (currentDepth > maxDepth) maxDepth = currentDepth;
+                
+                // 累加獎金 (現金 + 對碰)
+                totalPayout += (node.rewards.cash || 0) + (node.rewards.pairing || 0);
+                
+                if (node.level === 'L4') totalL4++;
+
+                traverse(node.pathA, currentDepth + 1);
+                traverse(node.pathB, currentDepth + 1);
+            }
+
+            traverse(treeData, 1);
+
+            // Update UI
+            document.getElementById('statCount').textContent = totalMembers;
+            document.getElementById('statDepth').textContent = maxDepth;
+            document.getElementById('statL4').textContent = totalL4;
+            document.getElementById('statPayout').textContent = '$' + totalPayout.toLocaleString();
+        }
+
+
         function getNodeBaseBV(level) {
             if (level === 'L2') return 80;
             if (level === 'L3') return 500;
@@ -392,6 +474,9 @@
             calculateDirectSponsorVolume(treeData);
             calculatePairingBonus(treeData);
             
+            // 計算完全部獎金後，統計全局數據
+            calculateGlobalStats();
+
             saveData();
         }
 
@@ -757,20 +842,13 @@
             return branch;
         }
 
-        // --- Viewport & Gesture Control (Center Zoom Logic) ---
+        // --- Viewport & Center Zoom Logic ---
         const viewport = document.getElementById('viewport');
         const panLayer = document.getElementById('panLayer');
         const settingsPanel = document.getElementById('settingsPanel');
         let scale = 1, translateX = 0, translateY = 0;
         let isDragging = false, startX, startY;
-        
-        // Touch Variables for Center Zoom
-        let startDist = 0;
-        let startScale = 1;
-        let startCenterX = 0;
-        let startCenterY = 0;
-        let startTranslateX = 0;
-        let startTranslateY = 0;
+        let startDist = 0, startScale = 1, startCenterX = 0, startCenterY = 0, startTranslateX = 0, startTranslateY = 0;
 
         function toggleSettings() { settingsPanel.classList.toggle('open'); }
         viewport.addEventListener('mousedown', () => { settingsPanel.classList.remove('open'); });
@@ -790,13 +868,11 @@
             setTimeout(() => { panLayer.classList.remove('smooth-move'); }, 300);
         }
 
-        // Mouse Wheel Zoom
         viewport.addEventListener('wheel', (e) => {
             e.preventDefault();
             panLayer.classList.remove('smooth-move');
             const newScale = Math.min(Math.max(0.2, scale + (-e.deltaY) * 0.001), 3);
             const rect = panLayer.getBoundingClientRect();
-            // Zoom towards mouse
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
             const ratio = newScale / scale;
@@ -805,7 +881,6 @@
             scale = newScale; updateTransform();
         }, { passive: false });
 
-        // Mouse Drag
         viewport.addEventListener('mousedown', (e) => {
             if (['INPUT','SELECT','BUTTON'].includes(e.target.tagName) || e.target.closest('.node-card')) return;
             panLayer.classList.remove('smooth-move');
@@ -820,8 +895,6 @@
 
         window.addEventListener('mouseup', () => { isDragging = false; viewport.style.cursor = 'grab'; });
 
-        // --- Touch Events (Center Zoom Implementation) ---
-        
         function getDistance(touches) {
             const dx = touches[0].clientX - touches[1].clientX;
             const dy = touches[0].clientY - touches[1].clientY;
@@ -840,12 +913,10 @@
             panLayer.classList.remove('smooth-move');
 
             if (e.touches.length === 1) {
-                // Single finger pan
                 isDragging = true;
                 startX = e.touches[0].clientX - translateX;
                 startY = e.touches[0].clientY - translateY;
             } else if (e.touches.length === 2) {
-                // Two finger pinch start
                 isDragging = false;
                 startDist = getDistance(e.touches);
                 startScale = scale;
@@ -859,29 +930,18 @@
 
         viewport.addEventListener('touchmove', (e) => {
             e.preventDefault(); 
-            
             if (e.touches.length === 1 && isDragging) {
-                // Pan logic
                 translateX = e.touches[0].clientX - startX;
                 translateY = e.touches[0].clientY - startY;
                 updateTransform();
             } else if (e.touches.length === 2) {
-                // Center Zoom Logic
                 const currDist = getDistance(e.touches);
                 const currCenter = getCenter(e.touches);
-
-                // Calculate new scale based on distance ratio
                 let newScale = startScale * (currDist / startDist);
-                // Clamp scale limits
                 newScale = Math.min(Math.max(0.2, newScale), 5);
-
-                // Formula: T_new = C_curr - (C_start - T_start) * (S_new / S_start)
-                // This keeps the point under the fingers static relative to the fingers
                 const scaleRatio = newScale / startScale;
-
                 translateX = currCenter.x - (startCenterX - startTranslateX) * scaleRatio;
                 translateY = currCenter.y - (startCenterY - startTranslateY) * scaleRatio;
-                
                 scale = newScale;
                 updateTransform();
             }
@@ -889,12 +949,8 @@
 
         viewport.addEventListener('touchend', (e) => {
             isDragging = false;
-            if (e.touches.length < 2) {
-                // Reset pinch tracking if fingers lift
-                startDist = 0;
-            }
+            if (e.touches.length < 2) startDist = 0;
         });
-
 
         const themeToggleBtn = document.getElementById('themeToggle');
         const themes = ['auto', 'light', 'dark'];
@@ -915,7 +971,7 @@
         function downloadJSON() {
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2));
             const a = document.createElement('a');
-            a.href = dataStr; a.download = "iHealth_tree_v15_center_zoom.json";
+            a.href = dataStr; a.download = "iHealth_tree_v16_stats.json";
             document.body.appendChild(a); a.click(); a.remove();
         }
         function importJSON(input) {
