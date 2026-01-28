@@ -123,7 +123,7 @@ function updatePayoutDisplay() {
         valEl.textContent = `$${revenueData.total.toLocaleString()} ($${revenueData.reship.toLocaleString()} + $${revenueData.signup.toLocaleString()})`;
         valEl.style.fontSize = '0.9rem';
     } else {
-        labelEl.textContent = '總發放獎金 (長按看營收)';
+        labelEl.textContent = '總發放獎金';
         labelEl.style.color = 'inherit';
         valEl.textContent = '$' + payoutValue.toLocaleString();
         valEl.style.fontSize = '1.1rem';
