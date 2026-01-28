@@ -1,6 +1,6 @@
 const surnames = ["陳", "林", "黃", "張", "李", "王", "吳", "劉", "蔡"];
 const names = ["大文", "小明", "志豪", "雅婷", "淑芬", "偉雄", "家豪", "怡君"];
-const STORAGE_KEY = 'iHealth_Tree_Calc_v5_Final'; // 版本號更新
+const STORAGE_KEY = 'iHealth_Tree_Calc_v6_Optimized'; // Version bump
 
 function getRandomName() { return surnames[Math.floor(Math.random() * surnames.length)] + names[Math.floor(Math.random() * names.length)]; }
 function generateUserID() { return Math.floor(100000 + Math.random() * 900000).toString(); }
@@ -79,7 +79,6 @@ function calculateGlobalStats() {
     revenueData = { signup: totalSignupRev, reship: totalReshipRev, total: totalSignupRev + totalReshipRev };
     payoutValue = totalPayout;
 
-    // Generation Stats
     let sponsorMap = {}; let allNodeIds = Object.keys(nodesCache);
     allNodeIds.forEach(id => {
         const node = nodesCache[id];
@@ -123,14 +122,13 @@ function updatePayoutDisplay() {
         valEl.textContent = `$${revenueData.total.toLocaleString()} ($${revenueData.reship.toLocaleString()} + $${revenueData.signup.toLocaleString()})`;
         valEl.style.fontSize = '0.9rem';
     } else {
-        labelEl.textContent = '總發放獎金';
+        labelEl.textContent = '總發放獎金 (長按看營收)';
         labelEl.style.color = 'inherit';
         valEl.textContent = '$' + payoutValue.toLocaleString();
         valEl.style.fontSize = '1.1rem';
     }
 }
 
-// --- REVENUE TOGGLE HOLD LOGIC ---
 const payoutBox = document.getElementById('payoutBox');
 const progress = document.getElementById('holdProgress');
 let holdDuration = 3000; 
@@ -182,14 +180,12 @@ function getSponsorReward(level) {
 }
 function collectAllDescendants(startNode, list) { if (!startNode) return; list.push(startNode); collectAllDescendants(startNode.pathA, list); collectAllDescendants(startNode.pathB, list); }
 
-// --- CORE CALCULATION ENGINE ---
 function calculateBonuses() {
     resetRewards(treeData); 
     nodesCache = {}; parentMap = {}; 
     buildCache(treeData, null);
     const allNodes = Object.values(nodesCache);
     
-    // 1. BV Calculation (Placement Tree) - CORRECTED
     allNodes.forEach(node => {
         let leftSubtreeNodes = []; collectAllDescendants(node.pathA, leftSubtreeNodes);
         let validLeftBV = 0; 
@@ -210,14 +206,11 @@ function calculateBonuses() {
         node.totalBvB = validRightBV;
     });
 
-    // 2. Pairing Bonus
     calculatePairingBonus(treeData);
 
-    // 3. Unilevel Cash Bonuses
     allNodes.forEach(node => {
         let curr = node; let generation = 1;
         let tempSponsor = nodesCache[curr.sponsorId];
-        
         while(tempSponsor && generation <= 8) {
             if (generation === 1 && tempSponsor.level !== 'L1') {
                 const rw = getSponsorReward(node.level);
@@ -236,12 +229,10 @@ function calculateBonuses() {
         }
     });
 
-    // 4. Rank & Other Bonuses
     allNodes.forEach(node => {
         let teamCount = 0; let stack = [];
         if(node.pathA) stack.push(node.pathA); if(node.pathB) stack.push(node.pathB);
         while(stack.length > 0) { let c = stack.pop(); teamCount++; if(c.pathA) stack.push(c.pathA); if(c.pathB) stack.push(c.pathB); }
-        
         if (teamCount >= 2000) node.rewards.rank = 2000;
         else if (teamCount >= 1000) node.rewards.rank = 1000;
         else if (teamCount >= 500) node.rewards.rank = 500;
@@ -266,7 +257,6 @@ function buildCache(node, parent) { if (!node) return; nodesCache[node.id] = nod
 function resetRewards(node) { if (!node) return; node.rewards = initRewards(); node.totalBvA = 0; node.totalBvB = 0; resetRewards(node.pathA); resetRewards(node.pathB); }
 function calculateAndRender(render = true) { calculateBonuses(); if(render) renderTree(false); }
 
-// --- BULK ADD LOGIC ---
 function bulkAdd(count) {
     let added = 0;
     for (let i = 0; i < count; i++) {
@@ -316,7 +306,6 @@ function openSponsorModal(nodeId) {
     let curr = nodesCache[nodeId];
     let parent = parentMap[curr.id];
     
-    // PUBLIC LINE LOGIC
     while(parent) {
         validSponsors.push(parent);
         if (parent.pathB && parent.pathB.id === curr.id) {
@@ -359,6 +348,8 @@ function deleteNode(nodeId) { if(nodeId === 'root' || !confirm("確定刪除？"
 function renderTree(centerView = true) {
     nodesCache = {}; parentMap = {}; buildCache(treeData, null);
     treeRootEl.innerHTML = ''; treeRootEl.appendChild(createNodeElement(treeData));
+    // Initial culling check
+    setTimeout(() => performCulling(), 100);
 }
 
 function createNodeElement(nodeData) {
@@ -408,13 +399,59 @@ function attachLongPress(element, callback) { let timer; const start = () => { i
 document.addEventListener('touchstart', (e) => { if (!e.target.closest('.node-card')) document.querySelectorAll('.node-card.edit-mode').forEach(el => el.classList.remove('edit-mode')); });
 document.addEventListener('mousedown', (e) => { if (!e.target.closest('.node-card')) document.querySelectorAll('.node-card.edit-mode').forEach(el => el.classList.remove('edit-mode')); });
 
-// --- PERFORMANCE OPTIMIZED DRAG LOGIC ---
+// --- CULLING & PERFORMANCE DRAG ---
 const viewport = document.getElementById('viewport'); 
 const panLayer = document.getElementById('panLayer');
 let scale = 1, translateX = 0, translateY = 0, isDragging = false, startX, startY;
 let startDist = 0, startScale = 1, startCenterX = 0, startCenterY = 0, startTranslateX = 0, startTranslateY = 0;
 let clickCount = 0; let clickTimer = null;
 let rafId = null;
+
+// The Culling Function
+function performCulling() {
+    const viewWidth = viewport.clientWidth;
+    const viewHeight = viewport.clientHeight;
+    // Calculate visible area in panLayer coordinates
+    // We add a buffer so nodes don't pop in instantly
+    const buffer = 300; 
+    
+    // Invert the transform to get the view rect relative to the panLayer
+    const left = -translateX / scale - buffer;
+    const top = -translateY / scale - buffer;
+    const right = (viewWidth - translateX) / scale + buffer;
+    const bottom = (viewHeight - translateY) / scale + buffer;
+
+    const nodes = document.querySelectorAll('.node-wrapper');
+    nodes.forEach(node => {
+        // Use offsetLeft/Top which are relative to the panLayer (since treeRoot is inside it)
+        // Note: This is a simplification. For deeper trees, offsets are relative to offsetParent.
+        // However, since .tree sets a flex context, getting absolute coords is tricky without getBoundingClientRect.
+        // But getBoundingClientRect causes Reflow.
+        
+        // BETTER APPROACH: Use getBoundingClientRect BUT optimize calls.
+        // Actually, for maximum performance during drag, we only cull on DragEnd or via throttle.
+        // Let's try a simple visibility toggle based on screen pos.
+        
+        const rect = node.getBoundingClientRect();
+        
+        // Check if overlaps with viewport
+        if (rect.bottom < 0 || rect.top > viewHeight || rect.right < 0 || rect.left > viewWidth) {
+            node.classList.add('culled');
+        } else {
+            node.classList.remove('culled');
+        }
+    });
+}
+
+// Throttle culling to avoid stutter
+let cullTimeout;
+function triggerCull() {
+    if (cullTimeout) return;
+    cullTimeout = setTimeout(() => {
+        performCulling();
+        cullTimeout = null;
+    }, 150); // Run culling every 150ms during drag
+}
 
 function handleTripleClick() { 
     clickCount++; 
@@ -431,6 +468,7 @@ function updateTransform() {
     rafId = requestAnimationFrame(() => {
         panLayer.style.transform = `translate3d(${translateX}px, ${translateY}px, 0) scale(${scale})`;
         rafId = null;
+        triggerCull(); // Check culling on move
     });
 }
 
@@ -440,7 +478,10 @@ function resetView() {
     translateX = (viewWidth - layerWidth) / 2; translateY = 40; 
     panLayer.style.transform = `translate3d(${translateX}px, ${translateY}px, 0) scale(1)`; 
     document.getElementById('statsBar').classList.remove('expanded'); 
-    setTimeout(() => panLayer.classList.remove('smooth-move'), 300); 
+    setTimeout(() => {
+        panLayer.classList.remove('smooth-move');
+        performCulling();
+    }, 300); 
 }
 
 viewport.addEventListener('wheel', (e) => { 
@@ -478,6 +519,7 @@ window.addEventListener('mouseup', () => {
     isDragging = false; 
     viewport.classList.remove('moving');
     viewport.style.cursor = 'grab'; 
+    performCulling(); // Final cull
 });
 
 function getDistance(touches) { return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY); }
@@ -524,7 +566,10 @@ viewport.addEventListener('touchmove', (e) => {
 
 viewport.addEventListener('touchend', (e) => { 
     isDragging = false; 
-    if (e.touches.length === 0) viewport.classList.remove('moving');
+    if (e.touches.length === 0) {
+        viewport.classList.remove('moving');
+        performCulling(); // Final cull on release
+    }
     if (e.touches.length < 2) startDist = 0; 
 });
 
@@ -532,7 +577,7 @@ const themeToggleBtn = document.getElementById('themeToggle'); const themes = ['
 function applyTheme(t) { document.documentElement.removeAttribute('data-theme'); let sys = window.matchMedia('(prefers-color-scheme: dark)').matches; themeToggleBtn.textContent = `外觀: ${t === 'auto' ? '自動' : (t === 'light' ? '淺色' : '深色')}`; if (t === 'dark' || (t === 'auto' && sys)) document.documentElement.setAttribute('data-theme', 'dark'); else document.documentElement.setAttribute('data-theme', 'light'); }
 themeToggleBtn.addEventListener('click', () => { currentThemeIndex = (currentThemeIndex + 1) % themes.length; applyTheme(themes[currentThemeIndex]); });
 
-function downloadJSON() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2)); a.download = "iHealth_tree_v5_final.json"; document.body.appendChild(a); a.click(); a.remove(); }
+function downloadJSON() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2)); a.download = "iHealth_tree_v6_opt.json"; document.body.appendChild(a); a.click(); a.remove(); }
 function importJSON(input) { const f = input.files[0]; if(!f) return; const r = new FileReader(); r.onload = (e) => { try { const d = JSON.parse(e.target.result); const fix = (n) => { if(!n)return; if(n.userID===undefined)n.userID=generateUserID(); if(n.sponsorId===undefined)n.sponsorId=null; if(n.totalBvA===undefined)n.totalBvA=0; if(n.totalBvB===undefined)n.totalBvB=0; if(n.rewards.pairing===undefined)n.rewards=initRewards(); fix(n.pathA); fix(n.pathB); }; fix(d); treeData = d; calculateAndRender(); input.value = ''; } catch(err) { alert('JSON Error'); } }; r.readAsText(f); }
 
 applyTheme('auto'); initData(); calculateAndRender(); window.onload = function() { setTimeout(resetView, 100); };

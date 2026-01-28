@@ -5,7 +5,7 @@
     --card-bg: #ffffff;
     --line-color: #98989d;
     --btn-primary: #0071e3;
-    --node-shadow: 0 4px 12px rgba(0,0,0,0.08); /* 平時漂亮的陰影 */
+    --node-shadow: 0 4px 12px rgba(0,0,0,0.08);
     
     --tag-l1: #e5e7eb; --tag-l1-text: #6b7280;
     --tag-l2: #dbeafe; --tag-l2-text: #1e40af;
@@ -17,10 +17,7 @@
     --danger-bg: #fee2e2; --danger-text: #ef4444; --danger-border: #fca5a5;
 
     /* Bonus Type Colors */
-    --c-onetime: #3b82f6;
-    --c-daily: #f59e0b;
-    --c-monthly: #8b5cf6;
-    --c-total: #10b981;
+    --c-onetime: #3b82f6; --c-daily: #f59e0b; --c-monthly: #8b5cf6; --c-total: #10b981;
 }
 
 [data-theme="dark"] {
@@ -48,28 +45,27 @@ body {
     user-select: none; -webkit-user-select: none; touch-action: none;
 }
 
-/* --- 優化 1: 統計欄高度瘦身 --- */
+/* --- 極致壓縮的統計欄 --- */
 .stats-bar { 
     position: fixed; bottom: 0; left: 0; width: 100%; 
     background-color: var(--stats-bg); border-top: 1px solid var(--stats-border); 
     backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 198; 
     box-shadow: 0 -4px 20px rgba(0,0,0,0.1); 
     transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
-    overflow: hidden; border-radius: 16px 16px 0 0; 
+    overflow: hidden; border-radius: 12px 12px 0 0; 
     padding-bottom: env(safe-area-inset-bottom); 
-    /* 修改高度計算：原本是 44px + inset，現在改更緊湊 */
-    height: calc(36px + env(safe-area-inset-bottom)); 
+    /* 高度再壓縮 */
+    height: calc(32px + env(safe-area-inset-bottom)); 
     display: flex; flex-direction: column; 
 }
 .stats-bar.expanded { height: 85vh; } 
 .stats-scroll-area { flex: 1; overflow-y: auto; padding-bottom: 40px; -webkit-overflow-scrolling: touch; }
-/* 手把改小一點 */
-.stats-handle { width: 36px; height: 4px; background-color: var(--line-color); border-radius: 3px; margin: 4px auto 2px auto; opacity: 0.3; flex-shrink: 0; }
-/* Header 改矮一點 */
-.stats-header { display: flex; justify-content: space-around; align-items: center; height: 28px; padding: 0 16px; cursor: pointer; flex-shrink: 0; }
-.stats-header-item { font-size: 0.8rem; font-weight: 500; display: flex; flex-direction: row; align-items: baseline; gap: 6px; }
-.stats-header-item span { font-size: 0.75rem; opacity: 0.7; }
-.stats-header-item strong { color: var(--text-color); font-family: monospace; font-size: 0.9rem; }
+/* 把手變得極細極小 */
+.stats-handle { width: 32px; height: 3px; background-color: var(--line-color); border-radius: 3px; margin: 3px auto 1px auto; opacity: 0.3; flex-shrink: 0; }
+.stats-header { display: flex; justify-content: space-around; align-items: center; height: 25px; padding: 0 12px; cursor: pointer; flex-shrink: 0; }
+.stats-header-item { font-size: 0.75rem; font-weight: 500; display: flex; flex-direction: row; align-items: baseline; gap: 4px; }
+.stats-header-item span { font-size: 0.7rem; opacity: 0.7; }
+.stats-header-item strong { color: var(--text-color); font-family: monospace; font-size: 0.85rem; }
 .stats-header-item.highlight strong { color: #10b981; }
 
 .stats-content { padding: 16px; opacity: 0; transition: opacity 0.2s; pointer-events: none; display: flex; flex-direction: column; gap: 16px; }
@@ -114,10 +110,9 @@ body {
 .save-indicator { font-size: 0.75rem; color: #10b981; text-align: right; min-width: 60px; }
 .author-credit { text-align: center; margin-top: 20px; margin-bottom: 10px; font-size: 0.7rem; opacity: 0.4; font-family: monospace; letter-spacing: 1px; }
 
-/* --- 優化 2: 硬體加速與渲染優化 --- */
+/* --- 效能核心優化 --- */
 .tree-container { 
     flex: 1; width: 100%; height: 100%; overflow: hidden; cursor: grab; position: relative; padding-bottom: 100px; 
-    /* 告訴瀏覽器這個區域會變化 */
     will-change: transform; 
 }
 .tree-container:active { cursor: grabbing; }
@@ -125,7 +120,6 @@ body {
 .pan-layer { 
     position: absolute; top: 0; left: 0; width: max-content; padding: 100px; 
     transform-origin: 0 0; 
-    /* 強制 GPU 加速 (3D) */
     transform: translate3d(0,0,0); 
     will-change: transform;
 }
@@ -134,9 +128,28 @@ body {
 .tree { display: flex; flex-direction: column; align-items: center; }
 .node-wrapper { 
     display: flex; flex-direction: column; align-items: center; position: relative; margin: 0 8px; 
-    /* 隔離渲染，避免一個節點變動影響全域 */
-    contain: layout style;
+    contain: layout style; /* 隔離渲染 */
 }
+
+/* 隱藏畫面外的節點 class */
+.node-wrapper.culled {
+    visibility: hidden;
+}
+/* 雖然隱藏 wrapper，但要保留空間，避免佈局塌陷。
+   這裡用一個技巧：只隱藏內容，不隱藏 wrapper 本身的大小計算。
+   但因為 visibility: hidden 會保留空間，所以剛好完美。
+   為了更進一步優化，我們可以讓內部的 card 完全不渲染陰影等 */
+.node-wrapper.culled .node-card {
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+}
+.node-wrapper.culled * {
+    display: none !important; /* 暴力隱藏所有子元素 */
+}
+/* 但要保留 wrapper 的佔位，這需要 JS 配合，或者單純 visibility:hidden 就夠了。
+   實測 visibility:hidden 對 GPU 負載有幫助，display:none 則會破壞佈局。
+   這裡我們只用 visibility:hidden */
 
 .children-container { display: flex; flex-direction: row; justify-content: center; padding-top: 36px; position: relative; }
 .children-container::before { content: ''; position: absolute; top: 0; left: 50%; width: 2px; height: 36px; background-color: var(--line-color); transform: translateX(-50%); }
@@ -155,21 +168,17 @@ body {
     box-shadow: var(--node-shadow); position: relative; z-index: 2; 
     display: flex; flex-direction: column; gap: 8px;
     transition: transform 0.2s;
-    /* 隔離渲染 */
     contain: content;
-    /* 促進 GPU 合成 */
     transform: translateZ(0);
 }
 
-/* --- 優化 3: 拖動時的低質量模式 --- */
-/* 當 JS 為 body 或 container 加上 'moving' class 時觸發 */
+/* 拖動時優化 */
 .tree-container.moving .node-card {
-    box-shadow: none !important; /* 移除陰影，大幅提升效能 */
-    border-radius: 0 !important; /* 可選：移除圓角會更快，但可能變醜，這裡建議只移除陰影 */
-    pointer-events: none; /* 禁止滑鼠事件檢測 */
+    box-shadow: none !important;
+    pointer-events: none;
 }
 .tree-container.moving .line-bv-tag {
-    display: none; /* 拖動時隱藏 BV 標籤，減少重繪 */
+    opacity: 0; /* 改用 opacity 避免 layout thrashing */
 }
 
 .node-card.edit-mode { z-index: 100; border-color: var(--btn-primary); transform: scale(1.05); box-shadow: 0 0 0 4px rgba(0,113,227, 0.2), 0 10px 24px rgba(0,0,0,0.15); }
