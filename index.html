@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>iHealth模擬器 - 營收透視版</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="tree-container" id="viewport">
+        <div class="pan-layer" id="panLayer">
+            <div id="treeRoot" class="tree"></div>
+        </div>
+    </div>
+
+    <div class="stats-bar" id="statsBar">
+        <div class="stats-handle"></div>
+        
+        <div class="stats-header" onclick="toggleStats()">
+            <div class="stats-header-item">
+                <span>總人數:</span>
+                <strong id="statCount">0</strong>
+            </div>
+            <div class="stats-header-item highlight">
+                <span>總店獎金:</span>
+                <strong id="statRootBonus">$0</strong>
+            </div>
+        </div>
+        
+        <div class="stats-scroll-area">
+            <div class="stats-content">
+                <div class="stats-section-header" style="margin-top: 0;">
+                    <div class="stats-section-title">全網數據</div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <span class="stat-box-label">組織深度</span>
+                        <span class="stat-box-value" id="statDepth">0</span>
+                    </div>
+                    <!-- 長按功能 -->
+                    <div class="stat-box" id="payoutBox" style="cursor: pointer; position: relative; overflow: hidden;">
+                        <span class="stat-box-label" id="payoutLabel">總發放獎金</span>
+                        <span class="stat-box-value" id="statTotalPayout" style="color: #10b981;">$0</span>
+                        <div id="holdProgress" style="position:absolute; bottom:0; left:0; height:4px; width:0%; background:#0071e3; transition: width 0.1s linear;"></div>
+                    </div>
+                </div>
+
+                <div class="stats-section-header">
+                    <div class="stats-section-title">級別分佈</div>
+                </div>
+                <div class="level-grid">
+                    <div class="level-box"><div class="level-tag" style="background:var(--tag-l1);color:var(--tag-l1-text)">L1</div><span class="level-val" id="cntL1">0</span></div>
+                    <div class="level-box"><div class="level-tag" style="background:var(--tag-l2);color:var(--tag-l2-text)">L2</div><span class="level-val" id="cntL2">0</span></div>
+                    <div class="level-box"><div class="level-tag" style="background:var(--tag-l3);color:var(--tag-l3-text)">L3</div><span class="level-val" id="cntL3">0</span></div>
+                    <div class="level-box"><div class="level-tag" style="background:var(--tag-l4);color:var(--tag-l4-text)">L4</div><span class="level-val" id="cntL4">0</span></div>
+                </div>
+
+                <div class="stats-section-header">
+                    <div class="stats-section-title">代數統計 (血緣關係)</div>
+                </div>
+                <div style="background: var(--bg-color); border-radius: 8px; padding: 0 10px;">
+                    <table class="gen-table">
+                        <thead><tr><th width="30%">代數</th><th>人數</th><th width="30%">代數</th><th>人數</th></tr></thead>
+                        <tbody id="genTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="stats-section-header">
+                    <div class="stats-section-title">系統操作</div>
+                    <div class="save-indicator" id="saveIndicator"></div>
+                </div>
+                
+                <div class="bulk-grid">
+                    <div class="control-btn small" onclick="bulkAdd(10)">+10</div>
+                    <div class="control-btn small" onclick="bulkAdd(50)">+50</div>
+                    <div class="control-btn small" onclick="bulkAdd(100)">+100</div>
+                    <div class="control-btn small" onclick="bulkAdd(500)">+500</div>
+                </div>
+
+                <div class="controls-grid">
+                    <div class="control-btn" id="themeToggle">外觀: 自動</div>
+                    <div class="control-btn" onclick="downloadJSON()">下載 JSON</div>
+                    <div class="file-input-wrapper"><div class="control-btn">導入 JSON</div><input type="file" id="fileInput" accept=".json" onchange="importJSON(this)"></div>
+                    <div class="control-btn" onclick="resetView()">重置視角</div>
+                </div>
+                
+                <div class="control-btn danger" onclick="clearAllData()" style="margin-top: 10px;">🗑️ 清除所有數據</div>
+                <div class="control-btn" id="bonusDetailBtn" onclick="toggleBonusDetails()" style="margin-top: 10px;">📖 獎金制度詳解</div>
+                <div class="author-credit">Made by Leoz · 2026</div>
+
+                <!-- 完整無刪減的制度說明 -->
+                <div id="bonusInfoBlock" class="info-block" style="margin-top: 16px; border-top: 1px dashed var(--line-color); padding-top: 10px;">
+                    <h4>1️⃣ 會員等級與權益</h4>
+                    <div class="table-scroll-wrapper">
+                        <table class="gen-table benefits-table">
+                            <thead><tr><th>等級</th><th>費用</th><th>產品券</th><th>代數</th><th>特殊權益</th></tr></thead>
+                            <tbody>
+                                <tr><td>L1</td><td>免費</td><td>無</td><td>無</td><td>鎖定人脈與積分</td></tr>
+                                <tr><td>L2</td><td>$150</td><td>無</td><td>2代</td><td>永久會員，終身不掉級</td></tr>
+                                <tr><td>L3</td><td>$1,100</td><td>$100</td><td>4代</td><td>經理級別</td></tr>
+                                <tr><td>L4</td><td>$2,200</td><td>$200</td><td>8代</td><td>董事級別，含股權積分</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="case-study">💡 升級替代方案：L2會員分享20個L2會員(每人$150)，可直接升級為L4永久股東。</div>
+                    
+                    <h4>2️⃣ 分享獎 (一次性)</h4>
+                    <ul>
+                        <li>推薦 <span class="info-highlight">L2</span>：<span class="info-money">$16</span> + 80 積分</li>
+                        <li>推薦 <span class="info-highlight">L3</span>：<span class="info-money">$100</span> + $100 產品券 + 500 積分</li>
+                        <li>推薦 <span class="info-highlight">L4</span>：<span class="info-money">$200</span> + $200 產品券 + 1000 積分</li>
+                    </ul>
+
+                    <h4>3️⃣ 自動復購獎 (月結)</h4>
+                    <p>每月團隊成員復購 <span class="info-money">$150</span> (40積分)：</p>
+                    <ul>
+                        <li>第 1 代直推：<span class="info-money">$16 /人</span></li>
+                        <li>第 2~8 代：<span class="info-money">$4 /人</span> (無限層級壓縮)</li>
+                    </ul>
+                    <div class="case-study">📝 案例：第1代 25人 ($400) + 第2-8代 2000人 ($8,000) = 合計約 <span class="info-money">$8,400 /月</span>。</div>
+
+                    <h4>4️⃣ 晉級獎 (月結)</h4>
+                    <table class="gen-table two-col-table">
+                        <tr><td>月復購 100人</td><td class="info-money">$100</td></tr>
+                        <tr><td>月復購 300人</td><td class="info-money">$300</td></tr>
+                        <tr><td>月復購 500人</td><td class="info-money">$500</td></tr>
+                        <tr><td>月復購 1000人</td><td class="info-money">$1,000</td></tr>
+                        <tr><td>月復購 2000人</td><td class="info-money">$2,000</td></tr>
+                    </table>
+                    <div class="case-study">📝 案例：月復購 2025人 = 自動復購獎 $8,400 + 晉級獎 $2,000 = <span class="info-money">$10,400 /月</span>。</div>
+
+                    <h4>5️⃣ 成就獎 (半年結)</h4>
+                    <p>持續六個月每月維持團隊復購人數：</p>
+                    <table class="gen-table two-col-table">
+                        <tr><td>100人</td><td class="info-money">$1,000</td></tr>
+                        <tr><td>300人</td><td class="info-money">$3,000</td></tr>
+                        <tr><td>500人</td><td class="info-money">$5,000</td></tr>
+                        <tr><td>1000人</td><td class="info-money">$10,000</td></tr>
+                        <tr><td>2000人</td><td class="info-money">$20,000</td></tr>
+                    </table>
+                    <div class="case-study">💡 疊加機制：若達標可同時領取多檔獎勵<br>(例如500人 = $1,000 + $3,000 + $5,000 = <span class="info-money">$9,000</span>)。</div>
+
+                    <h4>6️⃣ 積分變現獎 (日結)</h4>
+                    <p>採用雙軌制，取小市場積分 <span class="info-highlight">× 15%</span>。</p>
+                    <ul>
+                        <li>150美金復購 = 40 積分</li>
+                        <li>積分不歸零，對碰不封頂</li>
+                    </ul>
+                    <div class="case-study">📝 案例：小市場 280,000分 × 15% = <span class="info-money">$42,000</span>。</div>
+
+                    <h4>7️⃣ 幸運獎 (日結)</h4>
+                    <p>領取直推或間接下線「積分變現獎」的 <span class="info-highlight">10%</span>。</p>
+                    <ul>
+                        <li>第 1~8 代均為 10%</li>
+                        <li>系統自動壓縮</li>
+                    </ul>
+                    <div class="case-study">📝 案例：間接下線積分變現獎 $1000 × 10% = <span class="info-money">$100</span> (純消費者躺賺)。</div>
+
+                    <h4>8️⃣ 貢獻獎 (L4專屬)</h4>
+                    <ul>
+                        <li>ECBV 股權積分：公司分紅</li>
+                        <li>養老積分：兌換全球康養基地服務</li>
+                    </ul>
+                    <div class="case-study">📅 長期規劃：公司第三個五年計劃建立全球康養基地，讓會員憑養老積分免費入住。</div>
+
+                    <h4>9️⃣ 感恩晚宴獎 (月結)</h4>
+                    <table class="gen-table two-col-table">
+                        <tr><td>100人</td><td>$600</td></tr>
+                        <tr><td>300人</td><td>$800</td></tr>
+                        <tr><td>500人</td><td>$1,000</td></tr>
+                        <tr><td>1000人</td><td>$1,200</td></tr>
+                    </table>
+                    <p style="font-size:0.75rem;">用途：團隊聚餐、旅遊經費。</p>
+
+                    <h4>✨ 制度亮點</h4>
+                    <ul>
+                        <li>全球一張網，跨國裂變</li>
+                        <li>一次投資，終身受益 (不掉級不歸零)</li>
+                        <li>幸運獎讓純消費者也能獲利</li>
+                        <li>壓縮機制，無懼中間斷層</li>
+                        <li>睡後收入：管道建立後可傳承給家人</li>
+                    </ul>
+                </div>
+                <div style="height: 60px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="sponsorModal">
+        <div class="modal">
+            <div class="modal-title">選擇推薦人</div>
+            <div class="node-list" id="nodeListContainer"></div>
+            <div class="modal-actions">
+                <button class="modal-btn" onclick="closeSponsorModal()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
