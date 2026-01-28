@@ -1,6 +1,6 @@
 const surnames = ["陳", "林", "黃", "張", "李", "王", "吳", "劉", "蔡"];
 const names = ["大文", "小明", "志豪", "雅婷", "淑芬", "偉雄", "家豪", "怡君"];
-const STORAGE_KEY = 'iHealth_Tree_Calc_v4'; // Update version
+const STORAGE_KEY = 'iHealth_Tree_Calc_v5_Final'; // 版本號更新
 
 function getRandomName() { return surnames[Math.floor(Math.random() * surnames.length)] + names[Math.floor(Math.random() * names.length)]; }
 function generateUserID() { return Math.floor(100000 + Math.random() * 900000).toString(); }
@@ -10,7 +10,7 @@ let treeData; let nodesCache = {}; let parentMap = {};
 // Revenue Toggle State
 let showRevenue = false;
 let revenueData = { signup: 0, reship: 0, total: 0 };
-let payoutValue = 0; // Store the original payout value
+let payoutValue = 0; 
 
 function initData() {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -50,7 +50,6 @@ function calculateGlobalStats() {
     let totalMembers = 0; let maxDepth = 0; let totalPayout = 0; 
     let cntL1 = 0, cntL2 = 0, cntL3 = 0, cntL4 = 0;
     
-    // Revenue Variables
     let totalSignupRev = 0;
     let totalReshipRev = 0;
 
@@ -59,21 +58,16 @@ function calculateGlobalStats() {
         totalMembers++;
         if (currentDepth > maxDepth) maxDepth = currentDepth;
         
-        // Sum all payouts (Including Dinner)
         const r = node.rewards;
         const nodeTotal = r.referral + r.pairing + r.lucky + r.reship + r.rank + r.achievement + r.dinner;
         totalPayout += nodeTotal;
         
-        // Count Levels & Revenue
         if (node.level === 'L1') {
             cntL1++;
         } else {
-            // L2, L3, L4 Active Members
             if (node.level === 'L2') { cntL2++; totalSignupRev += 150; }
             else if (node.level === 'L3') { cntL3++; totalSignupRev += 1100; }
             else if (node.level === 'L4') { cntL4++; totalSignupRev += 2200; }
-            
-            // Assume every L2-L4 pays $150 monthly reship
             totalReshipRev += 150;
         }
 
@@ -82,7 +76,6 @@ function calculateGlobalStats() {
     }
     traverse(treeData, 1);
 
-    // Store for toggle logic
     revenueData = { signup: totalSignupRev, reship: totalReshipRev, total: totalSignupRev + totalReshipRev };
     payoutValue = totalPayout;
 
@@ -99,10 +92,8 @@ function calculateGlobalStats() {
         if (curr.gen < 8) { let recruits = sponsorMap[curr.id] || []; recruits.forEach(childId => { queue.push({ id: childId, gen: curr.gen + 1 }); }); }
     }
 
-    // UI Updates
     document.getElementById('statCount').textContent = totalMembers;
     
-    // Root Bonus
     const rootR = treeData.rewards;
     const rootTotal = rootR.referral + rootR.pairing + rootR.lucky + rootR.reship + rootR.rank + rootR.achievement + rootR.dinner;
     document.getElementById('statRootBonus').textContent = '$' + rootTotal.toLocaleString();
@@ -129,11 +120,10 @@ function updatePayoutDisplay() {
     if (showRevenue) {
         labelEl.textContent = '總公司營收 (復購 + 開店)';
         labelEl.style.color = '#f59e0b';
-        // Format: Total (Reship + Signup)
         valEl.textContent = `$${revenueData.total.toLocaleString()} ($${revenueData.reship.toLocaleString()} + $${revenueData.signup.toLocaleString()})`;
-        valEl.style.fontSize = '0.9rem'; // Slightly smaller to fit
+        valEl.style.fontSize = '0.9rem';
     } else {
-        labelEl.textContent = '總發放獎金';
+        labelEl.textContent = '總發放獎金 (長按看營收)';
         labelEl.style.color = 'inherit';
         valEl.textContent = '$' + payoutValue.toLocaleString();
         valEl.style.fontSize = '1.1rem';
@@ -143,15 +133,14 @@ function updatePayoutDisplay() {
 // --- REVENUE TOGGLE HOLD LOGIC ---
 const payoutBox = document.getElementById('payoutBox');
 const progress = document.getElementById('holdProgress');
-let holdTimer = null;
-let holdDuration = 3000; // 3 seconds
+let holdDuration = 3000; 
 let startTime = 0;
 let animationFrame = null;
 
 function startHold(e) {
-    if (e.type === 'touchstart') e.preventDefault(); // Prevent scroll on touch
+    if (e.type === 'touchstart') e.preventDefault(); 
     startTime = Date.now();
-    showRevenue = false; // Reset first
+    showRevenue = false; 
     updatePayoutDisplay();
     
     function animate() {
@@ -173,9 +162,6 @@ function startHold(e) {
 function endHold() {
     cancelAnimationFrame(animationFrame);
     progress.style.width = '0%';
-    // Optional: Reset back to Payout when released? 
-    // If you want it to stay Revenue, leave this line commented.
-    // If you want it to revert immediately on release:
     showRevenue = false;
     updatePayoutDisplay();
 }
@@ -203,14 +189,11 @@ function calculateBonuses() {
     buildCache(treeData, null);
     const allNodes = Object.values(nodesCache);
     
-    // 1. BV Calculation (Placement Tree) - NOW CORRECTED
-    // Previous bug: checked sponsorId.
-    // Correct logic: Sum all BV in Left/Right subtree regardless of sponsor.
+    // 1. BV Calculation (Placement Tree) - CORRECTED
     allNodes.forEach(node => {
         let leftSubtreeNodes = []; collectAllDescendants(node.pathA, leftSubtreeNodes);
         let validLeftBV = 0; 
         leftSubtreeNodes.forEach(child => { 
-            // Assume every L2/L3/L4 creates 40 BV Monthly + Signup BV
             if (child.level !== 'L1') {
                 validLeftBV += (getNodeBaseBV(child.level) + 40); 
             }
@@ -230,34 +213,24 @@ function calculateBonuses() {
     // 2. Pairing Bonus
     calculatePairingBonus(treeData);
 
-    // 3. Unilevel Cash Bonuses (Referral, Reship, Lucky) - Uses Sponsor Tree
+    // 3. Unilevel Cash Bonuses
     allNodes.forEach(node => {
         let curr = node; let generation = 1;
         let tempSponsor = nodesCache[curr.sponsorId];
         
-        // Trace up the sponsor tree 8 generations
         while(tempSponsor && generation <= 8) {
-            // Referral Bonus (One-time)
             if (generation === 1 && tempSponsor.level !== 'L1') {
                 const rw = getSponsorReward(node.level);
                 tempSponsor.rewards.referral += rw.cash;
                 tempSponsor.rewards.product += rw.card;
             }
-            
-            // Auto-Reship Bonus (Monthly)
-            // Logic: 1st Gen = $16, 2-8 Gen = $4
-            // Compressed: We are already traversing the compressed sponsor chain
-            if (tempSponsor.level !== 'L1' && node.level !== 'L1') { // Assuming active nodes pay
+            if (tempSponsor.level !== 'L1' && node.level !== 'L1') {
                     if (generation === 1) tempSponsor.rewards.reship += 16;
                     else tempSponsor.rewards.reship += 4;
             }
-
-            // Lucky Bonus (10% of Pairing)
             if (node.rewards.pairing > 0) { 
                 tempSponsor.rewards.lucky += (node.rewards.pairing * 0.1); 
             }
-
-            // Move up
             if (tempSponsor.sponsorId) tempSponsor = nodesCache[tempSponsor.sponsorId]; else tempSponsor = null;
             generation++;
         }
@@ -343,6 +316,7 @@ function openSponsorModal(nodeId) {
     let curr = nodesCache[nodeId];
     let parent = parentMap[curr.id];
     
+    // PUBLIC LINE LOGIC
     while(parent) {
         validSponsors.push(parent);
         if (parent.pathB && parent.pathB.id === curr.id) {
@@ -434,29 +408,131 @@ function attachLongPress(element, callback) { let timer; const start = () => { i
 document.addEventListener('touchstart', (e) => { if (!e.target.closest('.node-card')) document.querySelectorAll('.node-card.edit-mode').forEach(el => el.classList.remove('edit-mode')); });
 document.addEventListener('mousedown', (e) => { if (!e.target.closest('.node-card')) document.querySelectorAll('.node-card.edit-mode').forEach(el => el.classList.remove('edit-mode')); });
 
-const viewport = document.getElementById('viewport'); const panLayer = document.getElementById('panLayer');
+// --- PERFORMANCE OPTIMIZED DRAG LOGIC ---
+const viewport = document.getElementById('viewport'); 
+const panLayer = document.getElementById('panLayer');
 let scale = 1, translateX = 0, translateY = 0, isDragging = false, startX, startY;
 let startDist = 0, startScale = 1, startCenterX = 0, startCenterY = 0, startTranslateX = 0, startTranslateY = 0;
 let clickCount = 0; let clickTimer = null;
-function handleTripleClick() { clickCount++; if (clickCount === 1) { clickTimer = setTimeout(() => { clickCount = 0; }, 400); } else if (clickCount === 3) { clearTimeout(clickTimer); clickCount = 0; resetView(); if (navigator.vibrate) navigator.vibrate([50, 30, 50]); } }
-function updateTransform() { panLayer.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`; }
-function resetView() { scale = 1; panLayer.classList.add('smooth-move'); const layerWidth = panLayer.offsetWidth; const viewWidth = viewport.clientWidth; translateX = (viewWidth - layerWidth) / 2; translateY = 40; panLayer.style.transform = `translate(${translateX}px, ${translateY}px) scale(1)`; updateTransform(); document.getElementById('statsBar').classList.remove('expanded'); setTimeout(() => panLayer.classList.remove('smooth-move'), 300); }
+let rafId = null;
 
-viewport.addEventListener('wheel', (e) => { e.preventDefault(); panLayer.classList.remove('smooth-move'); const newScale = Math.min(Math.max(0.2, scale + (-e.deltaY) * 0.001), 3); const rect = panLayer.getBoundingClientRect(); const ratio = newScale / scale; translateX -= (e.clientX - rect.left) * (ratio - 1); translateY -= (e.clientY - rect.top) * (ratio - 1); scale = newScale; updateTransform(); }, { passive: false });
-viewport.addEventListener('mousedown', (e) => { if (['INPUT','SELECT','BUTTON'].includes(e.target.tagName) || e.target.closest('.node-card')) return; handleTripleClick(); panLayer.classList.remove('smooth-move'); isDragging = true; startX = e.clientX - translateX; startY = e.clientY - translateY; viewport.style.cursor = 'grabbing'; });
-window.addEventListener('mousemove', (e) => { if (!isDragging) return; e.preventDefault(); translateX = e.clientX - startX; translateY = e.clientY - startY; updateTransform(); });
-window.addEventListener('mouseup', () => { isDragging = false; viewport.style.cursor = 'grab'; });
+function handleTripleClick() { 
+    clickCount++; 
+    if (clickCount === 1) { 
+        clickTimer = setTimeout(() => { clickCount = 0; }, 400); 
+    } else if (clickCount === 3) { 
+        clearTimeout(clickTimer); clickCount = 0; resetView(); 
+        if (navigator.vibrate) navigator.vibrate([50, 30, 50]); 
+    } 
+}
+
+function updateTransform() {
+    if (rafId) return;
+    rafId = requestAnimationFrame(() => {
+        panLayer.style.transform = `translate3d(${translateX}px, ${translateY}px, 0) scale(${scale})`;
+        rafId = null;
+    });
+}
+
+function resetView() { 
+    scale = 1; panLayer.classList.add('smooth-move'); 
+    const layerWidth = panLayer.offsetWidth; const viewWidth = viewport.clientWidth; 
+    translateX = (viewWidth - layerWidth) / 2; translateY = 40; 
+    panLayer.style.transform = `translate3d(${translateX}px, ${translateY}px, 0) scale(1)`; 
+    document.getElementById('statsBar').classList.remove('expanded'); 
+    setTimeout(() => panLayer.classList.remove('smooth-move'), 300); 
+}
+
+viewport.addEventListener('wheel', (e) => { 
+    e.preventDefault(); 
+    panLayer.classList.remove('smooth-move'); 
+    const newScale = Math.min(Math.max(0.2, scale + (-e.deltaY) * 0.001), 3); 
+    const rect = panLayer.getBoundingClientRect(); 
+    const ratio = newScale / scale; 
+    translateX -= (e.clientX - rect.left) * (ratio - 1); 
+    translateY -= (e.clientY - rect.top) * (ratio - 1); 
+    scale = newScale; 
+    updateTransform(); 
+}, { passive: false });
+
+viewport.addEventListener('mousedown', (e) => { 
+    if (['INPUT','SELECT','BUTTON'].includes(e.target.tagName) || e.target.closest('.node-card')) return; 
+    handleTripleClick(); 
+    panLayer.classList.remove('smooth-move'); 
+    viewport.classList.add('moving');
+    isDragging = true; 
+    startX = e.clientX - translateX; 
+    startY = e.clientY - translateY; 
+    viewport.style.cursor = 'grabbing'; 
+});
+
+window.addEventListener('mousemove', (e) => { 
+    if (!isDragging) return; 
+    e.preventDefault(); 
+    translateX = e.clientX - startX; 
+    translateY = e.clientY - startY; 
+    updateTransform(); 
+});
+
+window.addEventListener('mouseup', () => { 
+    isDragging = false; 
+    viewport.classList.remove('moving');
+    viewport.style.cursor = 'grab'; 
+});
+
 function getDistance(touches) { return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY); }
 function getCenter(touches) { return { x: (touches[0].clientX + touches[1].clientX) / 2, y: (touches[0].clientY + touches[1].clientY) / 2 }; }
-viewport.addEventListener('touchstart', (e) => { if (e.target.closest('input') || e.target.closest('select') || e.target.closest('button')) return; panLayer.classList.remove('smooth-move'); if (e.touches.length === 1) { handleTripleClick(); isDragging = true; startX = e.touches[0].clientX - translateX; startY = e.touches[0].clientY - translateY; } else if (e.touches.length === 2) { isDragging = false; startDist = getDistance(e.touches); startScale = scale; const center = getCenter(e.touches); startCenterX = center.x; startCenterY = center.y; startTranslateX = translateX; startTranslateY = translateY; } }, { passive: false });
-viewport.addEventListener('touchmove', (e) => { e.preventDefault(); if (e.touches.length === 1 && isDragging) { translateX = e.touches[0].clientX - startX; translateY = e.touches[0].clientY - startY; updateTransform(); } else if (e.touches.length === 2) { const currDist = getDistance(e.touches); const currCenter = getCenter(e.touches); let newScale = Math.min(Math.max(0.2, startScale * (currDist / startDist)), 5); const ratio = newScale / startScale; translateX = currCenter.x - (startCenterX - startTranslateX) * ratio; translateY = currCenter.y - (startCenterY - startTranslateY) * ratio; scale = newScale; updateTransform(); } }, { passive: false });
-viewport.addEventListener('touchend', (e) => { isDragging = false; if (e.touches.length < 2) startDist = 0; });
+
+viewport.addEventListener('touchstart', (e) => { 
+    if (e.target.closest('input') || e.target.closest('select') || e.target.closest('button')) return; 
+    panLayer.classList.remove('smooth-move'); 
+    
+    if (e.touches.length === 1) { 
+        handleTripleClick(); 
+        viewport.classList.add('moving');
+        isDragging = true; 
+        startX = e.touches[0].clientX - translateX; 
+        startY = e.touches[0].clientY - translateY; 
+    } else if (e.touches.length === 2) { 
+        isDragging = false; 
+        viewport.classList.add('moving');
+        startDist = getDistance(e.touches); 
+        startScale = scale; 
+        const center = getCenter(e.touches); 
+        startCenterX = center.x; startCenterY = center.y; 
+        startTranslateX = translateX; startTranslateY = translateY; 
+    } 
+}, { passive: false });
+
+viewport.addEventListener('touchmove', (e) => { 
+    e.preventDefault(); 
+    if (e.touches.length === 1 && isDragging) { 
+        translateX = e.touches[0].clientX - startX; 
+        translateY = e.touches[0].clientY - startY; 
+        updateTransform(); 
+    } else if (e.touches.length === 2) { 
+        const currDist = getDistance(e.touches); 
+        const currCenter = getCenter(e.touches); 
+        let newScale = Math.min(Math.max(0.2, startScale * (currDist / startDist)), 5); 
+        const ratio = newScale / startScale; 
+        translateX = currCenter.x - (startCenterX - startTranslateX) * ratio; 
+        translateY = currCenter.y - (startCenterY - startTranslateY) * ratio; 
+        scale = newScale; 
+        updateTransform(); 
+    } 
+}, { passive: false });
+
+viewport.addEventListener('touchend', (e) => { 
+    isDragging = false; 
+    if (e.touches.length === 0) viewport.classList.remove('moving');
+    if (e.touches.length < 2) startDist = 0; 
+});
 
 const themeToggleBtn = document.getElementById('themeToggle'); const themes = ['auto', 'light', 'dark']; let currentThemeIndex = 0;
 function applyTheme(t) { document.documentElement.removeAttribute('data-theme'); let sys = window.matchMedia('(prefers-color-scheme: dark)').matches; themeToggleBtn.textContent = `外觀: ${t === 'auto' ? '自動' : (t === 'light' ? '淺色' : '深色')}`; if (t === 'dark' || (t === 'auto' && sys)) document.documentElement.setAttribute('data-theme', 'dark'); else document.documentElement.setAttribute('data-theme', 'light'); }
 themeToggleBtn.addEventListener('click', () => { currentThemeIndex = (currentThemeIndex + 1) % themes.length; applyTheme(themes[currentThemeIndex]); });
 
-function downloadJSON() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2)); a.download = "iHealth_tree_v34_rev.json"; document.body.appendChild(a); a.click(); a.remove(); }
+function downloadJSON() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2)); a.download = "iHealth_tree_v5_final.json"; document.body.appendChild(a); a.click(); a.remove(); }
 function importJSON(input) { const f = input.files[0]; if(!f) return; const r = new FileReader(); r.onload = (e) => { try { const d = JSON.parse(e.target.result); const fix = (n) => { if(!n)return; if(n.userID===undefined)n.userID=generateUserID(); if(n.sponsorId===undefined)n.sponsorId=null; if(n.totalBvA===undefined)n.totalBvA=0; if(n.totalBvB===undefined)n.totalBvB=0; if(n.rewards.pairing===undefined)n.rewards=initRewards(); fix(n.pathA); fix(n.pathB); }; fix(d); treeData = d; calculateAndRender(); input.value = ''; } catch(err) { alert('JSON Error'); } }; r.readAsText(f); }
 
 applyTheme('auto'); initData(); calculateAndRender(); window.onload = function() { setTimeout(resetView, 100); };
