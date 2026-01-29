@@ -1,6 +1,6 @@
 const surnames = ["陳", "林", "黃", "張", "李", "王", "吳", "劉", "蔡"];
 const names = ["大文", "小明", "志豪", "雅婷", "淑芬", "偉雄", "家豪", "怡君"];
-const STORAGE_KEY = 'iHealth_Tree_Calc_v9_Final'; // Version bump
+const STORAGE_KEY = 'iHealth_Tree_Calc_v10_FixClip'; // Version bump
 
 function getRandomName() { return surnames[Math.floor(Math.random() * surnames.length)] + names[Math.floor(Math.random() * names.length)]; }
 function generateUserID() { return Math.floor(100000 + Math.random() * 900000).toString(); }
@@ -353,7 +353,13 @@ function renderTree(centerView = true) {
 function createNodeElement(nodeData) {
     const wrapper = document.createElement('div'); wrapper.className = 'node-wrapper';
     const card = document.createElement('div'); card.className = 'node-card'; card.setAttribute('data-level', nodeData.level); card.id = `card-${nodeData.id}`;
-    attachLongPress(card, () => { document.querySelectorAll('.node-card.edit-mode').forEach(el => el.classList.remove('edit-mode')); card.classList.add('edit-mode'); });
+    
+    // 修正: 呼叫優化版的長按函數
+    attachLongPress(card, () => { 
+        document.querySelectorAll('.node-card.edit-mode').forEach(el => el.classList.remove('edit-mode')); 
+        card.classList.add('edit-mode'); 
+    });
+
     if (nodeData.id !== 'root') {
         const delBtn = document.createElement('div'); delBtn.className = 'delete-btn'; delBtn.textContent = '×';
         delBtn.ontouchstart = (e) => e.stopPropagation(); delBtn.onclick = (e) => { e.stopPropagation(); deleteNode(nodeData.id); }; card.appendChild(delBtn);
@@ -393,7 +399,70 @@ function createBranch(parentNode, pathKey) {
     branch.appendChild(content); return branch;
 }
 
-function attachLongPress(element, callback) { let timer; const start = () => { if (element.classList.contains('edit-mode')) return; timer = setTimeout(() => { callback(); if (navigator.vibrate) navigator.vibrate(50); }, 600); }; const cancel = () => { clearTimeout(timer); }; element.addEventListener('touchstart', start, {passive: true}); element.addEventListener('touchend', cancel); element.addEventListener('touchmove', cancel); element.addEventListener('mousedown', start); element.addEventListener('mouseup', cancel); element.addEventListener('mouseleave', cancel); }
+// 修正重點 3: 優化版 Long Press (抗抖動 + 防菜單)
+function attachLongPress(element, callback) { 
+    let timer; 
+    let startX, startY;
+    
+    // 開始長按
+    const start = (e) => { 
+        if (element.classList.contains('edit-mode')) return;
+        
+        // 記錄初始座標
+        if (e.touches) {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        } else {
+            startX = e.clientX;
+            startY = e.clientY;
+        }
+
+        timer = setTimeout(() => { 
+            callback(); 
+            if (navigator.vibrate) navigator.vibrate(50); 
+        }, 600); 
+    }; 
+    
+    // 手指移動 (加入容錯範圍)
+    const move = (e) => {
+        if (!timer) return;
+        
+        let cx, cy;
+        if (e.touches) {
+            cx = e.touches[0].clientX;
+            cy = e.touches[0].clientY;
+        } else {
+            cx = e.clientX;
+            cy = e.clientY;
+        }
+
+        // 計算移動距離，允許 10px 的抖動
+        const dist = Math.hypot(cx - startX, cy - startY);
+        if (dist > 10) {
+            clearTimeout(timer);
+            timer = null;
+        }
+    };
+
+    const cancel = () => { clearTimeout(timer); timer = null; }; 
+
+    // Touch Events
+    element.addEventListener('touchstart', start, {passive: true}); 
+    element.addEventListener('touchend', cancel); 
+    element.addEventListener('touchmove', move, {passive: true}); // 改用 move 函數判斷距離
+    
+    // Mouse Events
+    element.addEventListener('mousedown', start); 
+    element.addEventListener('mouseup', cancel); 
+    element.addEventListener('mouseleave', cancel);
+    
+    // 阻止右鍵菜單 (防止長按跳出系統選單)
+    element.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        return false;
+    });
+}
+
 document.addEventListener('touchstart', (e) => { if (!e.target.closest('.node-card')) document.querySelectorAll('.node-card.edit-mode').forEach(el => el.classList.remove('edit-mode')); });
 document.addEventListener('mousedown', (e) => { if (!e.target.closest('.node-card')) document.querySelectorAll('.node-card.edit-mode').forEach(el => el.classList.remove('edit-mode')); });
 
@@ -543,7 +612,7 @@ const themeToggleBtn = document.getElementById('themeToggle'); const themes = ['
 function applyTheme(t) { document.documentElement.removeAttribute('data-theme'); let sys = window.matchMedia('(prefers-color-scheme: dark)').matches; themeToggleBtn.textContent = `外觀: ${t === 'auto' ? '自動' : (t === 'light' ? '淺色' : '深色')}`; if (t === 'dark' || (t === 'auto' && sys)) document.documentElement.setAttribute('data-theme', 'dark'); else document.documentElement.setAttribute('data-theme', 'light'); }
 themeToggleBtn.addEventListener('click', () => { currentThemeIndex = (currentThemeIndex + 1) % themes.length; applyTheme(themes[currentThemeIndex]); });
 
-function downloadJSON() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2)); a.download = "iHealth_tree_v9_Final.json"; document.body.appendChild(a); a.click(); a.remove(); }
+function downloadJSON() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2)); a.download = "iHealth_tree_v10_FixClip.json"; document.body.appendChild(a); a.click(); a.remove(); }
 function importJSON(input) { const f = input.files[0]; if(!f) return; const r = new FileReader(); r.onload = (e) => { try { const d = JSON.parse(e.target.result); const fix = (n) => { if(!n)return; if(n.userID===undefined)n.userID=generateUserID(); if(n.sponsorId===undefined)n.sponsorId=null; if(n.totalBvA===undefined)n.totalBvA=0; if(n.totalBvB===undefined)n.totalBvB=0; if(n.rewards.pairing===undefined)n.rewards=initRewards(); fix(n.pathA); fix(n.pathB); }; fix(d); treeData = d; calculateAndRender(); input.value = ''; } catch(err) { alert('JSON Error'); } }; r.readAsText(f); }
 
 applyTheme('auto'); initData(); calculateAndRender(); window.onload = function() { setTimeout(resetView, 100); };

@@ -129,23 +129,20 @@ body {
 .tree { display: flex; flex-direction: column; align-items: center; }
 
 /* 
-   修正重點 1: 
-   為了讓 "浮動" 的按鈕和推薦人標籤不被裁切，
-   我們給 Wrapper 加了 padding-top，並擴大了 contain-intrinsic-size 的高度。
-   
-   Intrinsic Size 計算：
-   原本高度 264px + 頂部 padding 24px = 288px
+   修正重點 1: 左右裁切與預估大小
+   - 增加左右 padding: 16px (確保 -12px 的按鈕不會被切掉)
+   - 調整 contain-intrinsic-size: 
+     寬度 = 150(卡片) + 4(邊框) + 32(左右padding) = 186px
+     高度 = 260(卡片) + 4(邊框) + 24(上方padding) = 288px
 */
 .node-wrapper { 
     display: flex; flex-direction: column; align-items: center; position: relative; margin: 0 8px; 
-    
-    /* 新增：為上方的按鈕和標籤預留空間，防止被 paint 邊界裁切 */
     padding-top: 24px; 
+    padding-left: 16px; 
+    padding-right: 16px;
     
     content-visibility: auto; 
-    /* 更新：包含 padding 的預估大小 */
-    contain-intrinsic-size: 154px 288px; 
-    
+    contain-intrinsic-size: 186px 288px; 
     contain: layout style paint;
 }
 
@@ -156,29 +153,25 @@ body {
     box-shadow: var(--node-shadow); position: relative; z-index: 2; 
     display: flex; flex-direction: column; gap: 8px;
     
-    /* 讓子元素 (按鈕) 可以超出卡片邊界 */
     contain: layout style;
     overflow: visible;
+
+    /* 修正重點 2: iPhone 長按優化 */
+    -webkit-user-select: none; /* 禁止選取文字 */
+    -webkit-touch-callout: none; /* 禁止 iOS 預設長按選單 (放大鏡/複製) */
+    user-select: none;
 }
 
 /* LOD 模式 (縮小變色塊) */
 .tree-container.zoomed-out .node-card {
     box-shadow: none !important;
 }
-
-/* LOD 模式：隱藏卡片內部細節 */
 .tree-container.zoomed-out .node-card > * {
     display: none !important;
 }
-
-/* LOD 模式：隱藏外掛的按鈕與標籤 */
 .tree-container.zoomed-out .delete-btn,
 .tree-container.zoomed-out .sponsor-btn,
-.tree-container.zoomed-out .sponsor-label {
-    display: none !important;
-}
-
-/* LOD 模式：隱藏連線上的 BV 積分標籤 */
+.tree-container.zoomed-out .sponsor-label,
 .tree-container.zoomed-out .line-bv-tag {
     display: none !important;
 }
@@ -188,7 +181,6 @@ body {
 .tree-container.zoomed-out .node-card[data-level="L2"] { border-color: var(--tag-l2-text); background: var(--tag-l2); opacity: 0.5; }
 .tree-container.zoomed-out .node-card[data-level="L3"] { border-color: var(--tag-l3-text); background: var(--tag-l3); opacity: 0.5; }
 .tree-container.zoomed-out .node-card[data-level="L4"] { border-color: var(--tag-l4-text); background: var(--tag-l4); opacity: 0.5; }
-
 
 /* 拖動時 (Moving) */
 .tree-container.moving .node-card {
@@ -215,21 +207,14 @@ body {
 
 .node-card.edit-mode { z-index: 100; border-color: var(--btn-primary); transform: scale(1.05); box-shadow: 0 0 0 4px rgba(0,113,227, 0.2), 0 10px 24px rgba(0,0,0,0.15); }
 
-/* 
-   修正重點 2: 
-   調整按鈕的 top 定位，確保它們在新的 padding 區域內顯示良好。
-   雖然還是 top: -12px，但因為父容器有 padding-top: 24px，所以實際上它們現在位於可見區域。
-*/
+/* 按鈕位置調整 */
 .delete-btn, .sponsor-btn { position: absolute; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.3); z-index: 20; opacity: 0; transform: scale(0.5); pointer-events: none; transition: all 0.2s; }
 .delete-btn { top: -12px; right: -12px; background: #ff3b30; color: white; font-size: 18px; cursor: pointer; }
 .sponsor-btn { top: -12px; left: -12px; background: var(--btn-primary); color: white; font-size: 16px; cursor: pointer; }
 @media (hover: hover) { .node-card:hover .delete-btn, .node-card:hover .sponsor-btn { opacity: 1; transform: scale(1); pointer-events: auto; } }
 .node-card.edit-mode .delete-btn, .node-card.edit-mode .sponsor-btn { opacity: 1; transform: scale(1); pointer-events: auto; }
 
-/* 
-   修正重點 3: 
-   推薦人標籤樣式。之前因為在 paint 邊界外被隱藏，現在可以看到它了。
-*/
+/* 推薦人標籤 */
 .sponsor-label { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 0.6rem; color: var(--text-color); opacity: 0.8; font-weight: 600; pointer-events: none; white-space: nowrap; background: var(--bg-color); padding: 1px 4px; border-radius: 4px; border: 1px solid var(--line-color); z-index: 15; }
 
 .node-header { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line-color); }
