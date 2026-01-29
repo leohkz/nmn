@@ -45,7 +45,7 @@ body {
     user-select: none; -webkit-user-select: none; touch-action: none;
 }
 
-/* --- 極致壓縮的統計欄 --- */
+/* --- iPhone 極致壓縮的統計欄 --- */
 .stats-bar { 
     position: fixed; bottom: 0; left: 0; width: 100%; 
     background-color: var(--stats-bg); border-top: 1px solid var(--stats-border); 
@@ -54,13 +54,14 @@ body {
     transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
     overflow: hidden; border-radius: 12px 12px 0 0; 
     padding-bottom: env(safe-area-inset-bottom); 
-    /* 高度再壓縮 */
+    /* 高度壓縮至極限 */
     height: calc(32px + env(safe-area-inset-bottom)); 
     display: flex; flex-direction: column; 
 }
 .stats-bar.expanded { height: 85vh; } 
 .stats-scroll-area { flex: 1; overflow-y: auto; padding-bottom: 40px; -webkit-overflow-scrolling: touch; }
-/* 把手變得極細極小 */
+
+/* 縮小的把手與 Header */
 .stats-handle { width: 32px; height: 3px; background-color: var(--line-color); border-radius: 3px; margin: 3px auto 1px auto; opacity: 0.3; flex-shrink: 0; }
 .stats-header { display: flex; justify-content: space-around; align-items: center; height: 25px; padding: 0 12px; cursor: pointer; flex-shrink: 0; }
 .stats-header-item { font-size: 0.75rem; font-weight: 500; display: flex; flex-direction: row; align-items: baseline; gap: 4px; }
@@ -68,6 +69,7 @@ body {
 .stats-header-item strong { color: var(--text-color); font-family: monospace; font-size: 0.85rem; }
 .stats-header-item.highlight strong { color: #10b981; }
 
+/* 統計內容區 */
 .stats-content { padding: 16px; opacity: 0; transition: opacity 0.2s; pointer-events: none; display: flex; flex-direction: column; gap: 16px; }
 .stats-bar.expanded .stats-content { opacity: 1; pointer-events: auto; }
 .stats-section-header { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-bottom: 1px solid var(--line-color); padding-bottom: 4px; }
@@ -110,56 +112,56 @@ body {
 .save-indicator { font-size: 0.75rem; color: #10b981; text-align: right; min-width: 60px; }
 .author-credit { text-align: center; margin-top: 20px; margin-bottom: 10px; font-size: 0.7rem; opacity: 0.4; font-family: monospace; letter-spacing: 1px; }
 
-/* --- 效能核心優化 --- */
+/* --- 效能核心優化 (GPU + 剔除) --- */
 .tree-container { 
     flex: 1; width: 100%; height: 100%; overflow: hidden; cursor: grab; position: relative; padding-bottom: 100px; 
     will-change: transform; 
+    /* 確保佈局隔離，防止重排 */
+    contain: layout;
 }
 .tree-container:active { cursor: grabbing; }
 
 .pan-layer { 
     position: absolute; top: 0; left: 0; width: max-content; padding: 100px; 
     transform-origin: 0 0; 
+    /* 強制開啟 GPU 加速 */
     transform: translate3d(0,0,0); 
     will-change: transform;
 }
 .pan-layer.smooth-move { transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); }
 
 .tree { display: flex; flex-direction: column; align-items: center; }
+
 .node-wrapper { 
     display: flex; flex-direction: column; align-items: center; position: relative; margin: 0 8px; 
-    contain: layout style; /* 隔離渲染 */
+    contain: layout style; 
 }
 
-/* 隱藏畫面外的節點 class */
-.node-wrapper.culled {
+/* --- 關鍵優化修正 --- */
+/* 
+   我們不隱藏 node-wrapper 本身，因為 visibility:hidden 會繼承給子元素，
+   這會導致如果上線不在畫面內，下線也跟著消失。
+   解決方法：只隱藏 wrapper 裡面的 "卡片" 與 "標籤"，但保留 wrapper 結構。
+*/
+.node-wrapper.culled .node-card,
+.node-wrapper.culled .line-bv-tag,
+.node-wrapper.culled .sponsor-label {
+    /* 使用 visibility: hidden 確保空間被保留，不會導致樹結構跳動 */
     visibility: hidden;
 }
-/* 雖然隱藏 wrapper，但要保留空間，避免佈局塌陷。
-   這裡用一個技巧：只隱藏內容，不隱藏 wrapper 本身的大小計算。
-   但因為 visibility: hidden 會保留空間，所以剛好完美。
-   為了更進一步優化，我們可以讓內部的 card 完全不渲染陰影等 */
-.node-wrapper.culled .node-card {
-    box-shadow: none !important;
-    border: none !important;
-    background: transparent !important;
-}
-.node-wrapper.culled * {
-    display: none !important; /* 暴力隱藏所有子元素 */
-}
-/* 但要保留 wrapper 的佔位，這需要 JS 配合，或者單純 visibility:hidden 就夠了。
-   實測 visibility:hidden 對 GPU 負載有幫助，display:none 則會破壞佈局。
-   這裡我們只用 visibility:hidden */
 
 .children-container { display: flex; flex-direction: row; justify-content: center; padding-top: 36px; position: relative; }
 .children-container::before { content: ''; position: absolute; top: 0; left: 50%; width: 2px; height: 36px; background-color: var(--line-color); transform: translateX(-50%); }
+
 .branch { display: flex; flex-direction: column; align-items: center; position: relative; padding: 0 8px; }
 .branch::before { content: ''; position: absolute; top: 0; left: 0; width: 50%; height: 2px; background-color: var(--line-color); }
 .branch::after { content: ''; position: absolute; top: 0; right: 0; width: 50%; height: 2px; background-color: var(--line-color); }
 .branch:first-child::before { display: none; }
 .branch:last-child::after { display: none; }
+
 .branch-content { display: flex; flex-direction: column; align-items: center; position: relative; padding-top: 36px; }
 .branch-content::before { content: ''; position: absolute; top: 0; left: 50%; width: 2px; height: 36px; background-color: var(--line-color); transform: translateX(-50%); }
+
 .line-bv-tag { position: absolute; top: -12px; background-color: var(--bv-tag-bg); border: 1px solid var(--bv-tag-border); color: var(--bv-tag-text); font-size: 0.65rem; font-weight: 700; padding: 3px 8px; border-radius: 12px; z-index: 999; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.1); left: 50%; transform: translateX(-50%); }
 
 .node-card {
@@ -172,13 +174,13 @@ body {
     transform: translateZ(0);
 }
 
-/* 拖動時優化 */
+/* 拖動時：移除陰影，降低渲染成本 */
 .tree-container.moving .node-card {
     box-shadow: none !important;
     pointer-events: none;
 }
 .tree-container.moving .line-bv-tag {
-    opacity: 0; /* 改用 opacity 避免 layout thrashing */
+    opacity: 0;
 }
 
 .node-card.edit-mode { z-index: 100; border-color: var(--btn-primary); transform: scale(1.05); box-shadow: 0 0 0 4px rgba(0,113,227, 0.2), 0 10px 24px rgba(0,0,0,0.15); }
