@@ -54,14 +54,12 @@ body {
     transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
     overflow: hidden; border-radius: 12px 12px 0 0; 
     padding-bottom: env(safe-area-inset-bottom); 
-    /* 高度壓縮至極限 */
     height: calc(32px + env(safe-area-inset-bottom)); 
     display: flex; flex-direction: column; 
 }
 .stats-bar.expanded { height: 85vh; } 
 .stats-scroll-area { flex: 1; overflow-y: auto; padding-bottom: 40px; -webkit-overflow-scrolling: touch; }
 
-/* 縮小的把手與 Header */
 .stats-handle { width: 32px; height: 3px; background-color: var(--line-color); border-radius: 3px; margin: 3px auto 1px auto; opacity: 0.3; flex-shrink: 0; }
 .stats-header { display: flex; justify-content: space-around; align-items: center; height: 25px; padding: 0 12px; cursor: pointer; flex-shrink: 0; }
 .stats-header-item { font-size: 0.75rem; font-weight: 500; display: flex; flex-direction: row; align-items: baseline; gap: 4px; }
@@ -69,7 +67,6 @@ body {
 .stats-header-item strong { color: var(--text-color); font-family: monospace; font-size: 0.85rem; }
 .stats-header-item.highlight strong { color: #10b981; }
 
-/* 統計內容區 */
 .stats-content { padding: 16px; opacity: 0; transition: opacity 0.2s; pointer-events: none; display: flex; flex-direction: column; gap: 16px; }
 .stats-bar.expanded .stats-content { opacity: 1; pointer-events: auto; }
 .stats-section-header { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-bottom: 1px solid var(--line-color); padding-bottom: 4px; }
@@ -112,11 +109,10 @@ body {
 .save-indicator { font-size: 0.75rem; color: #10b981; text-align: right; min-width: 60px; }
 .author-credit { text-align: center; margin-top: 20px; margin-bottom: 10px; font-size: 0.7rem; opacity: 0.4; font-family: monospace; letter-spacing: 1px; }
 
-/* --- 效能核心優化 (GPU + 剔除) --- */
+/* --- 效能核心優化 (GPU + Native Culling) --- */
 .tree-container { 
     flex: 1; width: 100%; height: 100%; overflow: hidden; cursor: grab; position: relative; padding-bottom: 100px; 
     will-change: transform; 
-    /* 確保佈局隔離，防止重排 */
     contain: layout;
 }
 .tree-container:active { cursor: grabbing; }
@@ -124,30 +120,74 @@ body {
 .pan-layer { 
     position: absolute; top: 0; left: 0; width: max-content; padding: 100px; 
     transform-origin: 0 0; 
-    /* 強制開啟 GPU 加速 */
     transform: translate3d(0,0,0); 
     will-change: transform;
+    contain: layout;
 }
 .pan-layer.smooth-move { transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); }
 
 .tree { display: flex; flex-direction: column; align-items: center; }
 
+/* 
+   優化 1: content-visibility: auto
+   讓瀏覽器自動剔除畫面外的渲染，這是解決卡頓的核心
+*/
 .node-wrapper { 
     display: flex; flex-direction: column; align-items: center; position: relative; margin: 0 8px; 
-    contain: layout style; 
+    content-visibility: auto; 
+    contain-intrinsic-size: 150px 300px; /* 預估大小，防止滾動條跳動 */
+    contain: layout style paint;
 }
 
-/* --- 關鍵優化修正 --- */
+.node-card {
+    background-color: var(--card-bg); border: 2px solid var(--line-color); border-radius: 14px;
+    padding: 12px; width: 150px; min-height: 260px;
+    box-shadow: var(--node-shadow); position: relative; z-index: 2; 
+    display: flex; flex-direction: column; gap: 8px;
+    contain: content;
+    /* transform: translateZ(0);  移除，避免大量節點時爆VRAM */
+}
+
 /* 
-   我們不隱藏 node-wrapper 本身，因為 visibility:hidden 會繼承給子元素，
-   這會導致如果上線不在畫面內，下線也跟著消失。
-   解決方法：只隱藏 wrapper 裡面的 "卡片" 與 "標籤"，但保留 wrapper 結構。
+   優化 2: LOD (Level of Detail) 
+   縮小 (Zoom Out) 時切換到簡易模式 
 */
-.node-wrapper.culled .node-card,
-.node-wrapper.culled .line-bv-tag,
-.node-wrapper.culled .sponsor-label {
-    /* 使用 visibility: hidden 確保空間被保留，不會導致樹結構跳動 */
-    visibility: hidden;
+.tree-container.zoomed-out .node-card {
+    min-height: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    background-color: var(--card-bg) !important;
+    justify-content: center;
+    overflow: hidden;
+}
+
+/* 縮小時隱藏複雜內容 */
+.tree-container.zoomed-out .node-card > *:not(.node-header),
+.tree-container.zoomed-out .node-header > input, 
+.tree-container.zoomed-out .delete-btn,
+.tree-container.zoomed-out .sponsor-btn,
+.tree-container.zoomed-out .sponsor-label,
+.tree-container.zoomed-out .line-bv-tag {
+    display: none !important;
+}
+
+/* 縮小時的簡易 Header */
+.tree-container.zoomed-out .node-header {
+    border: none; padding: 0; margin: 0; height: 100%; justify-content: center;
+}
+.tree-container.zoomed-out .node-level-select {
+    pointer-events: none;
+    width: 100%; height: 100%; border-radius: 0;
+    font-size: 1.2rem;
+}
+
+/* 拖動時：只顯示輪廓，不顯示陰影 */
+.tree-container.moving .node-card {
+    box-shadow: none !important;
+    pointer-events: none;
+}
+.tree-container.moving .line-bv-tag {
+    opacity: 0;
 }
 
 .children-container { display: flex; flex-direction: row; justify-content: center; padding-top: 36px; position: relative; }
@@ -163,25 +203,6 @@ body {
 .branch-content::before { content: ''; position: absolute; top: 0; left: 50%; width: 2px; height: 36px; background-color: var(--line-color); transform: translateX(-50%); }
 
 .line-bv-tag { position: absolute; top: -12px; background-color: var(--bv-tag-bg); border: 1px solid var(--bv-tag-border); color: var(--bv-tag-text); font-size: 0.65rem; font-weight: 700; padding: 3px 8px; border-radius: 12px; z-index: 999; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.1); left: 50%; transform: translateX(-50%); }
-
-.node-card {
-    background-color: var(--card-bg); border: 2px solid var(--line-color); border-radius: 14px;
-    padding: 12px; width: 150px; min-height: 260px;
-    box-shadow: var(--node-shadow); position: relative; z-index: 2; 
-    display: flex; flex-direction: column; gap: 8px;
-    transition: transform 0.2s;
-    contain: content;
-    transform: translateZ(0);
-}
-
-/* 拖動時：移除陰影，降低渲染成本 */
-.tree-container.moving .node-card {
-    box-shadow: none !important;
-    pointer-events: none;
-}
-.tree-container.moving .line-bv-tag {
-    opacity: 0;
-}
 
 .node-card.edit-mode { z-index: 100; border-color: var(--btn-primary); transform: scale(1.05); box-shadow: 0 0 0 4px rgba(0,113,227, 0.2), 0 10px 24px rgba(0,0,0,0.15); }
 

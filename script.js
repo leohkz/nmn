@@ -1,6 +1,6 @@
 const surnames = ["陳", "林", "黃", "張", "李", "王", "吳", "劉", "蔡"];
 const names = ["大文", "小明", "志豪", "雅婷", "淑芬", "偉雄", "家豪", "怡君"];
-const STORAGE_KEY = 'iHealth_Tree_Calc_v6_Optimized'; // Version bump
+const STORAGE_KEY = 'iHealth_Tree_Calc_v7_LOD'; // Version bump
 
 function getRandomName() { return surnames[Math.floor(Math.random() * surnames.length)] + names[Math.floor(Math.random() * names.length)]; }
 function generateUserID() { return Math.floor(100000 + Math.random() * 900000).toString(); }
@@ -348,8 +348,6 @@ function deleteNode(nodeId) { if(nodeId === 'root' || !confirm("確定刪除？"
 function renderTree(centerView = true) {
     nodesCache = {}; parentMap = {}; buildCache(treeData, null);
     treeRootEl.innerHTML = ''; treeRootEl.appendChild(createNodeElement(treeData));
-    // Initial culling check
-    setTimeout(() => performCulling(), 100);
 }
 
 function createNodeElement(nodeData) {
@@ -399,7 +397,8 @@ function attachLongPress(element, callback) { let timer; const start = () => { i
 document.addEventListener('touchstart', (e) => { if (!e.target.closest('.node-card')) document.querySelectorAll('.node-card.edit-mode').forEach(el => el.classList.remove('edit-mode')); });
 document.addEventListener('mousedown', (e) => { if (!e.target.closest('.node-card')) document.querySelectorAll('.node-card.edit-mode').forEach(el => el.classList.remove('edit-mode')); });
 
-// --- CULLING & PERFORMANCE DRAG ---
+// --- PERFORMANCE ENGINE (CSS NATIVE + LOD) ---
+
 const viewport = document.getElementById('viewport'); 
 const panLayer = document.getElementById('panLayer');
 let scale = 1, translateX = 0, translateY = 0, isDragging = false, startX, startY;
@@ -407,50 +406,24 @@ let startDist = 0, startScale = 1, startCenterX = 0, startCenterY = 0, startTran
 let clickCount = 0; let clickTimer = null;
 let rafId = null;
 
-// The Culling Function
-function performCulling() {
-    const viewWidth = viewport.clientWidth;
-    const viewHeight = viewport.clientHeight;
-    // Calculate visible area in panLayer coordinates
-    // We add a buffer so nodes don't pop in instantly
-    const buffer = 300; 
-    
-    // Invert the transform to get the view rect relative to the panLayer
-    const left = -translateX / scale - buffer;
-    const top = -translateY / scale - buffer;
-    const right = (viewWidth - translateX) / scale + buffer;
-    const bottom = (viewHeight - translateY) / scale + buffer;
+// LOD Threshold: 當縮放小於 0.6 時，進入簡易模式
+const LOD_THRESHOLD = 0.6;
 
-    const nodes = document.querySelectorAll('.node-wrapper');
-    nodes.forEach(node => {
-        // Use offsetLeft/Top which are relative to the panLayer (since treeRoot is inside it)
-        // Note: This is a simplification. For deeper trees, offsets are relative to offsetParent.
-        // However, since .tree sets a flex context, getting absolute coords is tricky without getBoundingClientRect.
-        // But getBoundingClientRect causes Reflow.
-        
-        // BETTER APPROACH: Use getBoundingClientRect BUT optimize calls.
-        // Actually, for maximum performance during drag, we only cull on DragEnd or via throttle.
-        // Let's try a simple visibility toggle based on screen pos.
-        
-        const rect = node.getBoundingClientRect();
-        
-        // Check if overlaps with viewport
-        if (rect.bottom < 0 || rect.top > viewHeight || rect.right < 0 || rect.left > viewWidth) {
-            node.classList.add('culled');
-        } else {
-            node.classList.remove('culled');
-        }
-    });
+function checkLOD() {
+    if (scale < LOD_THRESHOLD) {
+        viewport.classList.add('zoomed-out');
+    } else {
+        viewport.classList.remove('zoomed-out');
+    }
 }
 
-// Throttle culling to avoid stutter
-let cullTimeout;
-function triggerCull() {
-    if (cullTimeout) return;
-    cullTimeout = setTimeout(() => {
-        performCulling();
-        cullTimeout = null;
-    }, 150); // Run culling every 150ms during drag
+function updateTransform() {
+    if (rafId) return;
+    rafId = requestAnimationFrame(() => {
+        // 3D 變換開啟硬體加速
+        panLayer.style.transform = `translate3d(${translateX}px, ${translateY}px, 0) scale(${scale})`;
+        rafId = null;
+    });
 }
 
 function handleTripleClick() { 
@@ -463,37 +436,33 @@ function handleTripleClick() {
     } 
 }
 
-function updateTransform() {
-    if (rafId) return;
-    rafId = requestAnimationFrame(() => {
-        panLayer.style.transform = `translate3d(${translateX}px, ${translateY}px, 0) scale(${scale})`;
-        rafId = null;
-        triggerCull(); // Check culling on move
-    });
-}
-
 function resetView() { 
     scale = 1; panLayer.classList.add('smooth-move'); 
     const layerWidth = panLayer.offsetWidth; const viewWidth = viewport.clientWidth; 
     translateX = (viewWidth - layerWidth) / 2; translateY = 40; 
+    
+    // 更新樣式
     panLayer.style.transform = `translate3d(${translateX}px, ${translateY}px, 0) scale(1)`; 
+    checkLOD(); // 重置 LOD
+
     document.getElementById('statsBar').classList.remove('expanded'); 
-    setTimeout(() => {
-        panLayer.classList.remove('smooth-move');
-        performCulling();
-    }, 300); 
+    setTimeout(() => { panLayer.classList.remove('smooth-move'); }, 300); 
 }
 
 viewport.addEventListener('wheel', (e) => { 
     e.preventDefault(); 
     panLayer.classList.remove('smooth-move'); 
-    const newScale = Math.min(Math.max(0.2, scale + (-e.deltaY) * 0.001), 3); 
+    const newScale = Math.min(Math.max(0.1, scale + (-e.deltaY) * 0.001), 3); 
+    
+    // 計算縮放中心
     const rect = panLayer.getBoundingClientRect(); 
     const ratio = newScale / scale; 
     translateX -= (e.clientX - rect.left) * (ratio - 1); 
     translateY -= (e.clientY - rect.top) * (ratio - 1); 
     scale = newScale; 
-    updateTransform(); 
+    
+    updateTransform();
+    checkLOD();
 }, { passive: false });
 
 viewport.addEventListener('mousedown', (e) => { 
@@ -519,7 +488,6 @@ window.addEventListener('mouseup', () => {
     isDragging = false; 
     viewport.classList.remove('moving');
     viewport.style.cursor = 'grab'; 
-    performCulling(); // Final cull
 });
 
 function getDistance(touches) { return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY); }
@@ -555,21 +523,19 @@ viewport.addEventListener('touchmove', (e) => {
     } else if (e.touches.length === 2) { 
         const currDist = getDistance(e.touches); 
         const currCenter = getCenter(e.touches); 
-        let newScale = Math.min(Math.max(0.2, startScale * (currDist / startDist)), 5); 
+        let newScale = Math.min(Math.max(0.1, startScale * (currDist / startDist)), 5); 
         const ratio = newScale / startScale; 
         translateX = currCenter.x - (startCenterX - startTranslateX) * ratio; 
         translateY = currCenter.y - (startCenterY - startTranslateY) * ratio; 
         scale = newScale; 
         updateTransform(); 
+        checkLOD(); 
     } 
 }, { passive: false });
 
 viewport.addEventListener('touchend', (e) => { 
     isDragging = false; 
-    if (e.touches.length === 0) {
-        viewport.classList.remove('moving');
-        performCulling(); // Final cull on release
-    }
+    if (e.touches.length === 0) viewport.classList.remove('moving');
     if (e.touches.length < 2) startDist = 0; 
 });
 
@@ -577,7 +543,7 @@ const themeToggleBtn = document.getElementById('themeToggle'); const themes = ['
 function applyTheme(t) { document.documentElement.removeAttribute('data-theme'); let sys = window.matchMedia('(prefers-color-scheme: dark)').matches; themeToggleBtn.textContent = `外觀: ${t === 'auto' ? '自動' : (t === 'light' ? '淺色' : '深色')}`; if (t === 'dark' || (t === 'auto' && sys)) document.documentElement.setAttribute('data-theme', 'dark'); else document.documentElement.setAttribute('data-theme', 'light'); }
 themeToggleBtn.addEventListener('click', () => { currentThemeIndex = (currentThemeIndex + 1) % themes.length; applyTheme(themes[currentThemeIndex]); });
 
-function downloadJSON() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2)); a.download = "iHealth_tree_v6_opt.json"; document.body.appendChild(a); a.click(); a.remove(); }
+function downloadJSON() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2)); a.download = "iHealth_tree_v7_final.json"; document.body.appendChild(a); a.click(); a.remove(); }
 function importJSON(input) { const f = input.files[0]; if(!f) return; const r = new FileReader(); r.onload = (e) => { try { const d = JSON.parse(e.target.result); const fix = (n) => { if(!n)return; if(n.userID===undefined)n.userID=generateUserID(); if(n.sponsorId===undefined)n.sponsorId=null; if(n.totalBvA===undefined)n.totalBvA=0; if(n.totalBvB===undefined)n.totalBvB=0; if(n.rewards.pairing===undefined)n.rewards=initRewards(); fix(n.pathA); fix(n.pathB); }; fix(d); treeData = d; calculateAndRender(); input.value = ''; } catch(err) { alert('JSON Error'); } }; r.readAsText(f); }
 
 applyTheme('auto'); initData(); calculateAndRender(); window.onload = function() { setTimeout(resetView, 100); };
