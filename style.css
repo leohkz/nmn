@@ -128,58 +128,45 @@ body {
 
 .tree { display: flex; flex-direction: column; align-items: center; }
 
-/* 
-   優化 1: content-visibility: auto
-   讓瀏覽器自動剔除畫面外的渲染，這是解決卡頓的核心
-*/
+/* content-visibility: auto 負責處理畫面外的剔除 */
 .node-wrapper { 
     display: flex; flex-direction: column; align-items: center; position: relative; margin: 0 8px; 
     content-visibility: auto; 
-    contain-intrinsic-size: 150px 300px; /* 預估大小，防止滾動條跳動 */
+    contain-intrinsic-size: 150px 260px; /* 修正：匹配實際卡片大小，防止滾動條跳動 */
     contain: layout style paint;
 }
 
 .node-card {
     background-color: var(--card-bg); border: 2px solid var(--line-color); border-radius: 14px;
-    padding: 12px; width: 150px; min-height: 260px;
+    padding: 12px; width: 150px; 
+    /* 關鍵修正：固定高度，避免隱藏內容時卡片塌陷導致的樹狀圖結構跳動 */
+    height: 260px; 
     box-shadow: var(--node-shadow); position: relative; z-index: 2; 
     display: flex; flex-direction: column; gap: 8px;
     contain: content;
-    /* transform: translateZ(0);  移除，避免大量節點時爆VRAM */
 }
 
 /* 
-   優化 2: LOD (Level of Detail) 
-   縮小 (Zoom Out) 時切換到簡易模式 
+   LOD 穩定版 (Stable LOD)
+   縮小時：保持卡片大小不變，只隱藏內部元素
+   結果：視覺上變成空白卡片，但位置完全不動
 */
 .tree-container.zoomed-out .node-card {
-    min-height: 40px !important;
-    height: 40px !important;
-    padding: 0 !important;
-    background-color: var(--card-bg) !important;
-    justify-content: center;
-    overflow: hidden;
+    /* 不改變高度，不改變 padding */
+    box-shadow: none !important; /* 移除陰影提升效能 */
 }
 
-/* 縮小時隱藏複雜內容 */
-.tree-container.zoomed-out .node-card > *:not(.node-header),
-.tree-container.zoomed-out .node-header > input, 
-.tree-container.zoomed-out .delete-btn,
-.tree-container.zoomed-out .sponsor-btn,
-.tree-container.zoomed-out .sponsor-label,
-.tree-container.zoomed-out .line-bv-tag {
+/* 縮小時隱藏內容 (使用 display: none 減少 DOM 節點渲染壓力) */
+.tree-container.zoomed-out .node-card > * {
     display: none !important;
 }
 
-/* 縮小時的簡易 Header */
-.tree-container.zoomed-out .node-header {
-    border: none; padding: 0; margin: 0; height: 100%; justify-content: center;
-}
-.tree-container.zoomed-out .node-level-select {
-    pointer-events: none;
-    width: 100%; height: 100%; border-radius: 0;
-    font-size: 1.2rem;
-}
+/* 可選：縮小時保留一點 Level 顏色的提示，例如邊框變色 */
+.tree-container.zoomed-out .node-card[data-level="L1"] { border-color: var(--tag-l1-text); background: var(--tag-l1); opacity: 0.5; }
+.tree-container.zoomed-out .node-card[data-level="L2"] { border-color: var(--tag-l2-text); background: var(--tag-l2); opacity: 0.5; }
+.tree-container.zoomed-out .node-card[data-level="L3"] { border-color: var(--tag-l3-text); background: var(--tag-l3); opacity: 0.5; }
+.tree-container.zoomed-out .node-card[data-level="L4"] { border-color: var(--tag-l4-text); background: var(--tag-l4); opacity: 0.5; }
+
 
 /* 拖動時：只顯示輪廓，不顯示陰影 */
 .tree-container.moving .node-card {
