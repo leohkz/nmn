@@ -114,6 +114,7 @@ body {
     flex: 1; width: 100%; height: 100%; overflow: hidden; cursor: grab; position: relative; padding-bottom: 100px; 
     will-change: transform; 
     contain: layout;
+    z-index: 1;
 }
 .tree-container:active { cursor: grabbing; }
 
@@ -122,43 +123,45 @@ body {
     transform-origin: 0 0; 
     transform: translate3d(0,0,0); 
     will-change: transform;
-    contain: layout;
+    
+    /* 修正重點 1：移除 content-visibility 以避免螢幕外渲染消失 Bug */
+    /* content-visibility: auto;  <-- REMOVED */
+    
+    contain: layout style;
+    backface-visibility: hidden;
+    perspective: 1000px;
 }
 .pan-layer.smooth-move { transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); }
 
 .tree { display: flex; flex-direction: column; align-items: center; }
 
-/* 
-   修正重點 1: 左右裁切與預估大小
-   - 增加左右 padding: 16px (確保 -12px 的按鈕不會被切掉)
-   - 調整 contain-intrinsic-size: 
-     寬度 = 150(卡片) + 4(邊框) + 32(左右padding) = 186px
-     高度 = 260(卡片) + 4(邊框) + 24(上方padding) = 288px
-*/
+/* Node Wrapper & Card 樣式 */
 .node-wrapper { 
     display: flex; flex-direction: column; align-items: center; position: relative; margin: 0 8px; 
     padding-top: 24px; 
     padding-left: 16px; 
     padding-right: 16px;
     
-    content-visibility: auto; 
-    contain-intrinsic-size: 186px 288px; 
+    /* 修正重點 2：雖然移除了 content-visibility，仍保留 intrinsic-size 供 layout 參考 */
+    contain-intrinsic-size: 186px 310px; 
     contain: layout style paint;
 }
 
 .node-card {
     background-color: var(--card-bg); border: 2px solid var(--line-color); border-radius: 14px;
     padding: 12px; width: 150px; 
-    height: 260px; 
+    
+    /* 高度確保能容納所有獎金項目 */
+    height: 280px; 
+    
     box-shadow: var(--node-shadow); position: relative; z-index: 2; 
     display: flex; flex-direction: column; gap: 8px;
     
     contain: layout style;
     overflow: visible;
 
-    /* 修正重點 2: iPhone 長按優化 */
-    -webkit-user-select: none; /* 禁止選取文字 */
-    -webkit-touch-callout: none; /* 禁止 iOS 預設長按選單 (放大鏡/複製) */
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
     user-select: none;
 }
 
@@ -226,13 +229,14 @@ body {
 .node-card[data-level="L3"] .node-level-select { background-color: var(--tag-l3); color: var(--tag-l3-text); }
 .node-card[data-level="L4"] .node-level-select { background-color: var(--tag-l4); color: var(--tag-l4-text); }
 
-.bonus-list { flex: 1; display: flex; flex-direction: column; gap: 4px; font-size: 0.7rem; overflow: hidden; padding-top: 4px; }
-.bonus-row { display: flex; justify-content: space-between; align-items: center; }
+/* 獎金列表 */
+.bonus-list { flex: 1; display: flex; flex-direction: column; gap: 3px; font-size: 0.7rem; overflow: hidden; padding-top: 4px; justify-content: flex-start; }
+.bonus-row { display: flex; justify-content: space-between; align-items: center; min-height: 16px; }
 .bonus-label { opacity: 0.8; display: flex; align-items: center; gap: 6px; }
 .bonus-val { font-family: monospace; font-weight: 600; font-size: 0.75rem; }
-.badge { padding: 2px 4px; border-radius: 4px; font-size: 0.6rem; color: white; font-weight: bold; min-width: 24px; text-align: center; }
+.badge { padding: 1px 4px; border-radius: 4px; font-size: 0.6rem; color: white; font-weight: bold; min-width: 24px; text-align: center; }
 .b-onetime { background-color: var(--c-onetime); } .b-daily { background-color: var(--c-daily); } .b-monthly { background-color: var(--c-monthly); }
-.total-row { margin-top: auto; border-top: 2px solid var(--line-color); padding-top: 8px; display: flex; justify-content: space-between; align-items: flex-end; }
+.total-row { margin-top: auto; border-top: 2px solid var(--line-color); padding-top: 6px; display: flex; justify-content: space-between; align-items: flex-end; }
 .total-label { font-size: 0.75rem; font-weight: bold; opacity: 0.9; }
 .total-val { font-size: 1.2rem; font-weight: 800; color: var(--c-total); font-family: monospace; }
 

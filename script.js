@@ -1,17 +1,18 @@
 const surnames = ["陳", "林", "黃", "張", "李", "王", "吳", "劉", "蔡"];
 const names = ["大文", "小明", "志豪", "雅婷", "淑芬", "偉雄", "家豪", "怡君"];
-const STORAGE_KEY = 'iHealth_Tree_Calc_v11_LockView'; // Version bump
+const STORAGE_KEY = 'iHealth_Tree_Calc_v13_AnchorFix';
 
 function getRandomName() { return surnames[Math.floor(Math.random() * surnames.length)] + names[Math.floor(Math.random() * names.length)]; }
 function generateUserID() { return Math.floor(100000 + Math.random() * 900000).toString(); }
 
 let treeData; let nodesCache = {}; let parentMap = {}; 
 
-// Revenue Toggle State
+// --- Revenue & Stats State ---
 let showRevenue = false;
 let revenueData = { signup: 0, reship: 0, total: 0 };
 let payoutValue = 0; 
 
+// --- Initialization ---
 function initData() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
@@ -28,9 +29,7 @@ function initData() {
 }
 
 function initRewards() {
-    return {
-        referral: 0, product: 0, pairing: 0, lucky: 0, reship: 0, rank: 0, achievement: 0, dinner: 0
-    };
+    return { referral: 0, product: 0, pairing: 0, lucky: 0, reship: 0, rank: 0, achievement: 0, dinner: 0 };
 }
 
 function saveData() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(treeData)); showSaveStatus('已儲存'); } catch (e) { showSaveStatus('儲存失敗'); } }
@@ -45,13 +44,11 @@ function toggleBonusDetails() {
     if(block.classList.contains('show')) { setTimeout(() => { block.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100); }
 }
 
-// --- GLOBAL STATS & REVENUE ---
+// --- CALCULATION LOGIC ---
 function calculateGlobalStats() {
     let totalMembers = 0; let maxDepth = 0; let totalPayout = 0; 
     let cntL1 = 0, cntL2 = 0, cntL3 = 0, cntL4 = 0;
-    
-    let totalSignupRev = 0;
-    let totalReshipRev = 0;
+    let totalSignupRev = 0; let totalReshipRev = 0;
 
     function traverse(node, currentDepth) {
         if (!node) return;
@@ -62,15 +59,13 @@ function calculateGlobalStats() {
         const nodeTotal = r.referral + r.pairing + r.lucky + r.reship + r.rank + r.achievement + r.dinner;
         totalPayout += nodeTotal;
         
-        if (node.level === 'L1') {
-            cntL1++;
-        } else {
+        if (node.level === 'L1') { cntL1++; } 
+        else {
             if (node.level === 'L2') { cntL2++; totalSignupRev += 150; }
             else if (node.level === 'L3') { cntL3++; totalSignupRev += 1100; }
             else if (node.level === 'L4') { cntL4++; totalSignupRev += 2200; }
-            totalReshipRev += 150;
+            totalReshipRev += 150; 
         }
-
         traverse(node.pathA, currentDepth + 1); 
         traverse(node.pathB, currentDepth + 1);
     }
@@ -92,13 +87,12 @@ function calculateGlobalStats() {
     }
 
     document.getElementById('statCount').textContent = totalMembers;
-    
     const rootR = treeData.rewards;
     const rootTotal = rootR.referral + rootR.pairing + rootR.lucky + rootR.reship + rootR.rank + rootR.achievement + rootR.dinner;
     document.getElementById('statRootBonus').textContent = '$' + rootTotal.toLocaleString();
-    
     document.getElementById('statDepth').textContent = maxDepth;
-    document.getElementById('cntL1').textContent = cntL1; document.getElementById('cntL2').textContent = cntL2; document.getElementById('cntL3').textContent = cntL3; document.getElementById('cntL4').textContent = cntL4;
+    document.getElementById('cntL1').textContent = cntL1; document.getElementById('cntL2').textContent = cntL2; 
+    document.getElementById('cntL3').textContent = cntL3; document.getElementById('cntL4').textContent = cntL4;
 
     const tbody = document.getElementById('genTableBody'); tbody.innerHTML = '';
     for (let i = 1; i <= 4; i++) {
@@ -108,69 +102,44 @@ function calculateGlobalStats() {
         tr.innerHTML = `<td>第 ${leftGen} 代</td><td style="color:${leftCount>0?'var(--btn-primary)':'inherit'}">${leftCount}</td><td>第 ${rightGen} 代</td><td style="color:${rightCount>0?'var(--btn-primary)':'inherit'}">${rightCount}</td>`;
         tbody.appendChild(tr);
     }
-
     updatePayoutDisplay();
 }
 
 function updatePayoutDisplay() {
     const labelEl = document.getElementById('payoutLabel');
     const valEl = document.getElementById('statTotalPayout');
-    
     if (showRevenue) {
-        labelEl.textContent = '總公司營收 (復購 + 開店)';
-        labelEl.style.color = '#f59e0b';
-        valEl.textContent = `$${revenueData.total.toLocaleString()} ($${revenueData.reship.toLocaleString()} + $${revenueData.signup.toLocaleString()})`;
-        valEl.style.fontSize = '0.9rem';
+        labelEl.textContent = '總公司營收 (復購 + 開店)'; labelEl.style.color = '#f59e0b';
+        valEl.textContent = `$${revenueData.total.toLocaleString()} ($${revenueData.reship.toLocaleString()} + $${revenueData.signup.toLocaleString()})`; valEl.style.fontSize = '0.9rem';
     } else {
-        labelEl.textContent = '總發放獎金 (長按看營收)';
-        labelEl.style.color = 'inherit';
-        valEl.textContent = '$' + payoutValue.toLocaleString();
-        valEl.style.fontSize = '1.1rem';
+        labelEl.textContent = '總發放獎金 (長按看營收)'; labelEl.style.color = 'inherit';
+        valEl.textContent = '$' + payoutValue.toLocaleString(); valEl.style.fontSize = '1.1rem';
     }
 }
 
+// Payout Box Long Press
 const payoutBox = document.getElementById('payoutBox');
 const progress = document.getElementById('holdProgress');
-let holdDuration = 3000; 
-let startTime = 0;
-let animationFrame = null;
+let holdDuration = 3000; let holdStartTime = 0; let holdFrame = null;
 
 function startHold(e) {
     if (e.type === 'touchstart') e.preventDefault(); 
-    startTime = Date.now();
-    showRevenue = false; 
-    updatePayoutDisplay();
-    
+    holdStartTime = Date.now(); showRevenue = false; updatePayoutDisplay();
     function animate() {
-        let elapsed = Date.now() - startTime;
+        let elapsed = Date.now() - holdStartTime;
         let pct = Math.min((elapsed / holdDuration) * 100, 100);
         progress.style.width = pct + '%';
-        
-        if (elapsed >= holdDuration) {
-            showRevenue = true;
-            updatePayoutDisplay();
-            if (navigator.vibrate) navigator.vibrate(100);
-            return;
-        }
-        animationFrame = requestAnimationFrame(animate);
+        if (elapsed >= holdDuration) { showRevenue = true; updatePayoutDisplay(); if (navigator.vibrate) navigator.vibrate(100); return; }
+        holdFrame = requestAnimationFrame(animate);
     }
-    animationFrame = requestAnimationFrame(animate);
+    holdFrame = requestAnimationFrame(animate);
 }
+function endHold() { cancelAnimationFrame(holdFrame); progress.style.width = '0%'; showRevenue = false; updatePayoutDisplay(); }
 
-function endHold() {
-    cancelAnimationFrame(animationFrame);
-    progress.style.width = '0%';
-    showRevenue = false;
-    updatePayoutDisplay();
-}
+payoutBox.addEventListener('mousedown', startHold); payoutBox.addEventListener('touchstart', startHold);
+payoutBox.addEventListener('mouseup', endHold); payoutBox.addEventListener('mouseleave', endHold); payoutBox.addEventListener('touchend', endHold);
 
-payoutBox.addEventListener('mousedown', startHold);
-payoutBox.addEventListener('touchstart', startHold);
-payoutBox.addEventListener('mouseup', endHold);
-payoutBox.addEventListener('mouseleave', endHold);
-payoutBox.addEventListener('touchend', endHold);
-
-
+// --- BONUS CALCULATION HELPERS ---
 function getNodeBaseBV(level) { if (level === 'L2') return 80; if (level === 'L3') return 500; if (level === 'L4') return 1000; return 0; }
 function getSponsorReward(level) {
     if (level === 'L2') return { cash: 16, bv: 80, card: 0 };
@@ -181,33 +150,26 @@ function getSponsorReward(level) {
 function collectAllDescendants(startNode, list) { if (!startNode) return; list.push(startNode); collectAllDescendants(startNode.pathA, list); collectAllDescendants(startNode.pathB, list); }
 
 function calculateBonuses() {
-    resetRewards(treeData); 
-    nodesCache = {}; parentMap = {}; 
-    buildCache(treeData, null);
+    resetRewards(treeData); nodesCache = {}; parentMap = {}; buildCache(treeData, null);
     const allNodes = Object.values(nodesCache);
     
+    // 1. Subtree BV
     allNodes.forEach(node => {
         let leftSubtreeNodes = []; collectAllDescendants(node.pathA, leftSubtreeNodes);
         let validLeftBV = 0; 
-        leftSubtreeNodes.forEach(child => { 
-            if (child.level !== 'L1') {
-                validLeftBV += (getNodeBaseBV(child.level) + 40); 
-            }
-        });
+        leftSubtreeNodes.forEach(child => { if (child.level !== 'L1') validLeftBV += (getNodeBaseBV(child.level) + 40); });
         node.totalBvA = validLeftBV;
 
         let rightSubtreeNodes = []; collectAllDescendants(node.pathB, rightSubtreeNodes);
         let validRightBV = 0; 
-        rightSubtreeNodes.forEach(child => { 
-            if (child.level !== 'L1') {
-                validRightBV += (getNodeBaseBV(child.level) + 40); 
-            }
-        });
+        rightSubtreeNodes.forEach(child => { if (child.level !== 'L1') validRightBV += (getNodeBaseBV(child.level) + 40); });
         node.totalBvB = validRightBV;
     });
 
+    // 2. Pairing
     calculatePairingBonus(treeData);
 
+    // 3. Sponsor & Lucky
     allNodes.forEach(node => {
         let curr = node; let generation = 1;
         let tempSponsor = nodesCache[curr.sponsorId];
@@ -218,17 +180,16 @@ function calculateBonuses() {
                 tempSponsor.rewards.product += rw.card;
             }
             if (tempSponsor.level !== 'L1' && node.level !== 'L1') {
-                    if (generation === 1) tempSponsor.rewards.reship += 16;
-                    else tempSponsor.rewards.reship += 4;
+                if (generation === 1) tempSponsor.rewards.reship += 16;
+                else tempSponsor.rewards.reship += 4;
             }
-            if (node.rewards.pairing > 0) { 
-                tempSponsor.rewards.lucky += (node.rewards.pairing * 0.1); 
-            }
+            if (node.rewards.pairing > 0) { tempSponsor.rewards.lucky += (node.rewards.pairing * 0.1); }
             if (tempSponsor.sponsorId) tempSponsor = nodesCache[tempSponsor.sponsorId]; else tempSponsor = null;
             generation++;
         }
     });
 
+    // 4. Rank
     allNodes.forEach(node => {
         let teamCount = 0; let stack = [];
         if(node.pathA) stack.push(node.pathA); if(node.pathB) stack.push(node.pathB);
@@ -248,8 +209,7 @@ function calculateBonuses() {
         node.rewards.dinner = din;
     });
 
-    calculateGlobalStats(); 
-    saveData();
+    calculateGlobalStats(); saveData();
 }
 
 function calculatePairingBonus(node) { if (!node) return; const pairVolume = Math.min(node.totalBvA, node.totalBvB); if (pairVolume > 0) node.rewards.pairing = Math.round(pairVolume * 0.15 * 100) / 100; calculatePairingBonus(node.pathA); calculatePairingBonus(node.pathB); }
@@ -257,64 +217,84 @@ function buildCache(node, parent) { if (!node) return; nodesCache[node.id] = nod
 function resetRewards(node) { if (!node) return; node.rewards = initRewards(); node.totalBvA = 0; node.totalBvB = 0; resetRewards(node.pathA); resetRewards(node.pathB); }
 function calculateAndRender(render = true) { calculateBonuses(); if(render) renderTree(false); }
 
-function bulkAdd(count) {
-    let added = 0;
-    for (let i = 0; i < count; i++) {
-        let allNodes = [];
-        collectAllDescendants(treeData, allNodes);
-        let candidates = allNodes.filter(n => !n.pathA || !n.pathB);
-        if (candidates.length === 0) break;
-        
-        let parent = candidates[Math.floor(Math.random() * candidates.length)];
-        let pathKey = '';
-        if (!parent.pathA && !parent.pathB) pathKey = Math.random() > 0.5 ? 'pathA' : 'pathB';
-        else if (!parent.pathA) pathKey = 'pathA';
-        else pathKey = 'pathB';
-        
+// --- NODE OPERATIONS & ANCHOR FIX ---
+
+// 1. 修正：透過對比父節點在渲染前後的絕對位置，來修正跳動
+function addNode(parentId, pathKey) {
+    // A. 記錄渲染前父節點的位置 (相對於 Viewport)
+    const parentNodeOld = document.getElementById(`card-${parentId}`);
+    let rectOld;
+    if (parentNodeOld) {
+        rectOld = parentNodeOld.getBoundingClientRect();
+    }
+
+    // B. 更新數據
+    const parent = findNode(treeData, parentId);
+    if (parent) {
         parent[pathKey] = {
-            id: Date.now().toString() + Math.random().toString().substr(2, 5),
-            userID: generateUserID(),
-            name: getRandomName(),
-            level: 'L4', 
-            sponsorId: parent.id,
-            pathA: null, pathB: null,
+            id: Date.now().toString(), userID: generateUserID(), name: getRandomName(), level: 'L4',
+            sponsorId: parent.id, pathA: null, pathB: null,
             rewards: initRewards(), totalBvA: 0, totalBvB: 0
         };
-        added++;
+        
+        // C. 重新渲染
+        calculateAndRender();
+
+        // D. 坐標錨定補償 (Anchor Compensation)
+        // 渲染後，樹的結構變了，父節點可能被推到別的地方去了。
+        // 我們計算它跑了多遠，然後把 Viewport 移回來，讓使用者感覺「它沒動」。
+        if (rectOld) {
+            // 由於 DOM 已重建，需重新抓取元素
+            const parentNodeNew = document.getElementById(`card-${parentId}`);
+            if (parentNodeNew) {
+                const rectNew = parentNodeNew.getBoundingClientRect();
+                
+                // 計算位移差 (Delta)
+                const dx = rectNew.left - rectOld.left;
+                const dy = rectNew.top - rectOld.top;
+                
+                // 如果位移過大 (例如異常跳動)，或者僅是微小位移，都進行修正
+                if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+                    translateX -= dx;
+                    translateY -= dy;
+                    updateTransform();
+                }
+            }
+        }
     }
-    calculateAndRender();
 }
+
+function deleteNode(nodeId) { if(nodeId === 'root' || !confirm("確定刪除？")) return; const parent = findParent(treeData, nodeId); if (parent) { if (parent.pathA && parent.pathA.id === nodeId) parent.pathA = null; else if (parent.pathB && parent.pathB.id === nodeId) parent.pathB = null; calculateAndRender(); } }
 
 function updateNodeData(id, key, value) { 
     const node = findNode(treeData, id); 
     if (node) { 
         node[key] = value; 
-        if (key === 'level') {
-            calculateAndRender(true); 
-        } else {
-            saveData();
-        }
+        if (key === 'level') calculateAndRender(true); else saveData();
     } 
 }
 
+function bulkAdd(count) {
+    let added = 0;
+    for (let i = 0; i < count; i++) {
+        let allNodes = []; collectAllDescendants(treeData, allNodes);
+        let candidates = allNodes.filter(n => !n.pathA || !n.pathB);
+        if (candidates.length === 0) break;
+        let parent = candidates[Math.floor(Math.random() * candidates.length)];
+        let pathKey = (!parent.pathA && !parent.pathB) ? (Math.random() > 0.5 ? 'pathA' : 'pathB') : (!parent.pathA ? 'pathA' : 'pathB');
+        parent[pathKey] = { id: Date.now().toString() + Math.random().toString().substr(2, 5), userID: generateUserID(), name: getRandomName(), level: 'L4', sponsorId: parent.id, pathA: null, pathB: null, rewards: initRewards(), totalBvA: 0, totalBvB: 0 };
+        added++;
+    }
+    calculateAndRender();
+}
+
+// --- SPONSOR MODAL ---
 let currentSelectingNodeId = null;
 function openSponsorModal(nodeId) {
     currentSelectingNodeId = nodeId; const container = document.getElementById('nodeListContainer'); container.innerHTML = '';
     nodesCache = {}; parentMap = {}; buildCache(treeData, null);
-    
-    let validSponsors = [];
-    let curr = nodesCache[nodeId];
-    let parent = parentMap[curr.id];
-    
-    while(parent) {
-        validSponsors.push(parent);
-        if (parent.pathB && parent.pathB.id === curr.id) {
-            break;
-        }
-        curr = parent;
-        parent = parentMap[curr.id];
-    }
-
+    let validSponsors = []; let curr = nodesCache[nodeId]; let parent = parentMap[curr.id];
+    while(parent) { validSponsors.push(parent); if (parent.pathB && parent.pathB.id === curr.id) break; curr = parent; parent = parentMap[curr.id]; }
     if (validSponsors.length === 0) { container.innerHTML = '<div style="padding:10px;text-align:center;opacity:0.6;">無可選推薦人</div>'; } 
     else {
         validSponsors.forEach(n => {
@@ -333,114 +313,32 @@ const treeRootEl = document.getElementById('treeRoot');
 function findNode(root, id) { if (!root) return null; if (root.id === id) return root; return findNode(root.pathA, id) || findNode(root.pathB, id); }
 function findParent(root, childId) { if (!root) return null; if ((root.pathA && root.pathA.id === childId) || (root.pathB && root.pathB.id === childId)) return root; return findParent(root.pathA, childId) || findParent(root.pathB, childId); }
 
-// --- 關鍵修正：新增節點時的座標鎖定 (Visual Anchor) ---
-function addNode(parentId, pathKey) {
-    // 1. 找到觸發這個動作的按鈕 (DOM元素)
-    // 我們透過 activeElement 或者 event target 來定位不夠準確，因為 render 會清空 DOM。
-    // 所以我們要在點擊瞬間計算「該按鈕相對於螢幕中心的位置」。
-    
-    // 這裡我們假設最後一次點擊的座標 (由全域 touchstart/mousedown 記錄) 
-    // 是使用者的操作點。
-    const anchorX = lastTouchX; 
-    const anchorY = lastTouchY; 
-    
-    // 記錄當前這個點對應的「Canvas 內部座標」(尚未被縮放偏移影響的原始邏輯座標)
-    // CanvasX = (ScreenX - translateX) / scale
-    const logicX = (anchorX - translateX) / scale;
-    const logicY = (anchorY - translateY) / scale;
+// --- RENDERING ---
 
-    const parent = findNode(treeData, parentId);
-    if (parent) {
-        parent[pathKey] = {
-            id: Date.now().toString(), userID: generateUserID(), name: getRandomName(), level: 'L4',
-            sponsorId: parent.id, pathA: null, pathB: null,
-            rewards: initRewards(), totalBvA: 0, totalBvB: 0
-        }; 
-        
-        // 重新渲染並重新計算座標
-        calculateAndRender();
-        
-        // 2. 渲染後，嘗試找回剛才操作的那個位置附近的新元素
-        // 由於 DOM 已經變了，我們無法精確定位同一個按鈕。
-        // 但是，我們可以假設「樹的結構改變導致的位移」主要發生在父節點下方。
-        // 我們這裡使用一個反向補償策略：
-        // 讓原本的 logicX, logicY 在新的渲染後，依然出現在 anchorX, anchorY 的位置。
-        
-        // 但由於樹的寬度可能大幅增加，我們很難知道剛才那個點現在跑去哪了 (因為沒有 ID 對應)。
-        // 替代方案：我們改為鎖定「父節點」的位置。
-        
-        // 讓瀏覽器完成佈局
-        requestAnimationFrame(() => {
-            const parentCard = document.getElementById(`card-${parentId}`);
-            if (parentCard) {
-                const rect = parentCard.getBoundingClientRect();
-                const parentNewScreenX = rect.left + rect.width / 2;
-                const parentNewScreenY = rect.top + rect.height / 2;
-                
-                // 我們希望 parentCard 保持在螢幕上相對穩定的位置
-                // 實際上，新增節點通常是往下長，所以鎖定父節點應該還算自然。
-                // 更好的體驗是：確保點擊的那個 "+" 按鈕的位置（大約在父節點下方）不變。
-                
-                // 簡單暴力的鎖定：保持目前的 translateX/Y 不變？ 
-                // 不行，因為樹變寬了，父節點可能會往左或右跑。
-                
-                // 正確做法：計算位移差 (Delta)
-                // 渲染前父節點在哪？ 我們沒記錄。
-                // 所以我們採取「以父節點為中心」進行校正。
-                // 這是最穩定的參照物。
-                
-                // 計算目前父節點在螢幕上的位置，和我們期望它在的位置（保持相對穩定）
-                // 這比較複雜，因為我們沒有渲染前的父節點座標。
-                
-                // 實用解法：
-                // 保持 panLayer 的偏移量不變，通常就能達到「不跳動」。
-                // 跳動通常是因為「樹變寬了」，導致父節點相對於 panLayer 原點 (0,0) 的位置變了？
-                // 在 Flexbox column 佈局中，根節點通常在中心。如果左邊加了節點，根節點會往右擠。
-                
-                // **終極解法：使用 renderTree(false) 的參數**
-                // 我們修改 renderTree 讓它不要重置 View，但這還不夠。
-                // 我們需要在 render 之後，根據 parent node 的新位置去調整 translateX。
-                
-                // 在此版本，我們先不做過度複雜的物理計算，
-                // 而是依賴 CSS 的 flex 佈局特性，並確保我們不要主動去 resetView()。
-            }
-        });
-    }
+// 2. 修正：強制重繪以避免白屏 (解決 Chrome/Safari 硬體加速 Bug)
+function forceRepaint() {
+    // 微調 opacity 觸發 GPU 合成層更新，解決消失問題
+    panLayer.style.opacity = '0.99'; 
+    requestAnimationFrame(() => {
+        panLayer.style.opacity = '';
+    });
 }
 
-function deleteNode(nodeId) { if(nodeId === 'root' || !confirm("確定刪除？")) return; const parent = findParent(treeData, nodeId); if (parent) { if (parent.pathA && parent.pathA.id === nodeId) parent.pathA = null; else if (parent.pathB && parent.pathB.id === nodeId) parent.pathB = null; calculateAndRender(); } }
-
-// 記錄最後點擊位置，用於座標鎖定 (簡單版)
-let lastTouchX = 0; let lastTouchY = 0;
-window.addEventListener('touchstart', (e) => { lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY; }, {passive: true});
-window.addEventListener('mousedown', (e) => { lastTouchX = e.clientX; lastTouchY = e.clientY; }, {passive: true});
-
-
 function renderTree(centerView = true) {
-    // 渲染前記錄父節點位置 (如果是新增操作引發的渲染)
-    let anchorNodeId = null;
-    let preRenderRect = null;
-    
-    // 如果不是重置視角，嘗試鎖定當前畫面中心的節點，或者是正在操作的節點
-    if (!centerView && currentSelectingNodeId) {
-       // ... 略，這裡邏輯較複雜，我們先用簡單的「不重置 View」策略
-    }
-
     nodesCache = {}; parentMap = {}; buildCache(treeData, null);
     treeRootEl.innerHTML = ''; treeRootEl.appendChild(createNodeElement(treeData));
     
-    // 渲染後，確保 DOM 更新
-    // 注意：這裡不呼叫 resetView()，這樣 translateX/Y 保持不變。
-    // 用戶會看到樹「長出來」，但視窗不會跳回 (0,0)。
-    // 唯一的問題是：如果樹往左邊長了很多，原來的位置可能偏離中心。
-    // 但這比「瞬間跳動」好。
+    // 初始化時才重置視角，其他時候保持不動
+    if (centerView) resetView();
+    
+    // 渲染後強制重繪
+    forceRepaint();
 }
 
 function createNodeElement(nodeData) {
     const wrapper = document.createElement('div'); wrapper.className = 'node-wrapper';
     const card = document.createElement('div'); card.className = 'node-card'; card.setAttribute('data-level', nodeData.level); card.id = `card-${nodeData.id}`;
     
-    // 修正: 確保所有節點（包含新生成的）都綁定了長按
     attachLongPress(card, () => { 
         document.querySelectorAll('.node-card.edit-mode').forEach(el => el.classList.remove('edit-mode')); 
         card.classList.add('edit-mode'); 
@@ -481,103 +379,48 @@ function createBranch(parentNode, pathKey) {
     const branch = document.createElement('div'); branch.className = 'branch';
     const content = document.createElement('div'); content.className = 'branch-content';
     if (parentNode[pathKey]) content.appendChild(createNodeElement(parentNode[pathKey]));
-    else { const addBtn = document.createElement('button'); addBtn.className = 'add-btn'; addBtn.textContent = '+'; 
-        // 修正：點擊新增按鈕時，記錄當前父節點 ID，方便後續定位 (雖然這裡主要依賴 renderTree 不重置)
-        addBtn.onclick = () => addNode(parentNode.id, pathKey); 
-        addBtn.ontouchstart = (e) => e.stopPropagation(); content.appendChild(addBtn); }
+    else { 
+        const addBtn = document.createElement('button'); addBtn.className = 'add-btn'; addBtn.textContent = '+'; 
+        addBtn.onclick = (e) => {
+            // 點擊新增
+            addNode(parentNode.id, pathKey); 
+        };
+        addBtn.ontouchstart = (e) => e.stopPropagation(); 
+        content.appendChild(addBtn); 
+    }
     branch.appendChild(content); return branch;
 }
 
-// 修正重點 3: 優化版 Long Press (抗抖動 + 防菜單 + 縮放補償)
+// --- LONG PRESS ---
 function attachLongPress(element, callback) { 
-    let timer; 
-    let startX, startY;
-    
+    let timer; let startX, startY;
     const start = (e) => { 
         if (element.classList.contains('edit-mode')) return;
-        
-        if (e.touches) {
-            startX = e.touches[0].clientX;
-            startY = e.touches[0].clientY;
-        } else {
-            startX = e.clientX;
-            startY = e.clientY;
-        }
-
-        timer = setTimeout(() => { 
-            callback(); 
-            if (navigator.vibrate) navigator.vibrate(50); 
-        }, 600); 
+        if (e.touches) { startX = e.touches[0].clientX; startY = e.touches[0].clientY; } else { startX = e.clientX; startY = e.clientY; }
+        timer = setTimeout(() => { callback(); if (navigator.vibrate) navigator.vibrate(50); }, 600); 
     }; 
-    
     const move = (e) => {
         if (!timer) return;
-        
-        let cx, cy;
-        if (e.touches) {
-            cx = e.touches[0].clientX;
-            cy = e.touches[0].clientY;
-        } else {
-            cx = e.clientX;
-            cy = e.clientY;
-        }
-
-        // 計算移動距離
-        const dist = Math.hypot(cx - startX, cy - startY);
-        
-        // 關鍵：根據縮放比例調整容忍度
-        // 當 scale 很小 (縮小看全圖) 時，手指一點點移動對應的 DOM 距離很大，容易誤判。
-        // 當 scale 很大 (放大看細節) 時，手指移動很靈敏。
-        // 我們希望在任何縮放比例下，物理手指移動 10px 內都算長按。
-        // 但這裡我們比對的是螢幕像素 (Screen Pixels)，所以不需要除以 scale。
-        // 手指在螢幕上滑動 10px 就是 10px。
-        
-        // 然而，有時候手指按壓面積變化會導致中心點飄移。
-        // 我們放寬容忍度到 15px
-        if (dist > 15) {
-            clearTimeout(timer);
-            timer = null;
-        }
+        let cx, cy; if (e.touches) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; } else { cx = e.clientX; cy = e.clientY; }
+        if (Math.hypot(cx - startX, cy - startY) > 15) { clearTimeout(timer); timer = null; }
     };
-
     const cancel = () => { clearTimeout(timer); timer = null; }; 
-
-    element.addEventListener('touchstart', start, {passive: true}); 
-    element.addEventListener('touchend', cancel); 
-    element.addEventListener('touchmove', move, {passive: true}); 
-    
-    element.addEventListener('mousedown', start); 
-    element.addEventListener('mouseup', cancel); 
-    element.addEventListener('mouseleave', cancel);
-    
-    element.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        return false;
-    });
+    element.addEventListener('touchstart', start, {passive: true}); element.addEventListener('touchend', cancel); element.addEventListener('touchmove', move, {passive: true}); 
+    element.addEventListener('mousedown', start); element.addEventListener('mouseup', cancel); element.addEventListener('mouseleave', cancel);
+    element.addEventListener('contextmenu', (e) => { e.preventDefault(); return false; });
 }
 
 document.addEventListener('touchstart', (e) => { if (!e.target.closest('.node-card')) document.querySelectorAll('.node-card.edit-mode').forEach(el => el.classList.remove('edit-mode')); });
 document.addEventListener('mousedown', (e) => { if (!e.target.closest('.node-card')) document.querySelectorAll('.node-card.edit-mode').forEach(el => el.classList.remove('edit-mode')); });
 
-// --- PERFORMANCE ENGINE (CSS NATIVE + LOD) ---
-
-const viewport = document.getElementById('viewport'); 
-const panLayer = document.getElementById('panLayer');
+// --- VIEWPORT ENGINE ---
+const viewport = document.getElementById('viewport'); const panLayer = document.getElementById('panLayer');
 let scale = 1, translateX = 0, translateY = 0, isDragging = false, startX, startY;
 let startDist = 0, startScale = 1, startCenterX = 0, startCenterY = 0, startTranslateX = 0, startTranslateY = 0;
-let clickCount = 0; let clickTimer = null;
-let rafId = null;
-
+let clickCount = 0; let clickTimer = null; let rafId = null;
 const LOD_THRESHOLD = 0.6;
 
-function checkLOD() {
-    if (scale < LOD_THRESHOLD) {
-        viewport.classList.add('zoomed-out');
-    } else {
-        viewport.classList.remove('zoomed-out');
-    }
-}
-
+function checkLOD() { if (scale < LOD_THRESHOLD) viewport.classList.add('zoomed-out'); else viewport.classList.remove('zoomed-out'); }
 function updateTransform() {
     if (rafId) return;
     rafId = requestAnimationFrame(() => {
@@ -585,68 +428,35 @@ function updateTransform() {
         rafId = null;
     });
 }
-
 function handleTripleClick() { 
-    clickCount++; 
-    if (clickCount === 1) { 
-        clickTimer = setTimeout(() => { clickCount = 0; }, 400); 
-    } else if (clickCount === 3) { 
-        clearTimeout(clickTimer); clickCount = 0; resetView(); 
-        if (navigator.vibrate) navigator.vibrate([50, 30, 50]); 
-    } 
+    clickCount++; if (clickCount === 1) { clickTimer = setTimeout(() => { clickCount = 0; }, 400); } 
+    else if (clickCount === 3) { clearTimeout(clickTimer); clickCount = 0; resetView(); if (navigator.vibrate) navigator.vibrate([50, 30, 50]); } 
 }
-
 function resetView() { 
     scale = 1; panLayer.classList.add('smooth-move'); 
     const layerWidth = panLayer.offsetWidth; const viewWidth = viewport.clientWidth; 
     translateX = (viewWidth - layerWidth) / 2; translateY = 40; 
-    
     panLayer.style.transform = `translate3d(${translateX}px, ${translateY}px, 0) scale(1)`; 
-    checkLOD(); 
-
-    document.getElementById('statsBar').classList.remove('expanded'); 
+    checkLOD(); document.getElementById('statsBar').classList.remove('expanded'); 
     setTimeout(() => { panLayer.classList.remove('smooth-move'); }, 300); 
 }
 
 viewport.addEventListener('wheel', (e) => { 
-    e.preventDefault(); 
-    panLayer.classList.remove('smooth-move'); 
+    e.preventDefault(); panLayer.classList.remove('smooth-move'); 
     const newScale = Math.min(Math.max(0.1, scale + (-e.deltaY) * 0.001), 3); 
-    
     const rect = panLayer.getBoundingClientRect(); 
     const ratio = newScale / scale; 
-    translateX -= (e.clientX - rect.left) * (ratio - 1); 
-    translateY -= (e.clientY - rect.top) * (ratio - 1); 
-    scale = newScale; 
-    
-    updateTransform();
-    checkLOD();
+    translateX -= (e.clientX - rect.left) * (ratio - 1); translateY -= (e.clientY - rect.top) * (ratio - 1); 
+    scale = newScale; updateTransform(); checkLOD();
 }, { passive: false });
 
 viewport.addEventListener('mousedown', (e) => { 
     if (['INPUT','SELECT','BUTTON'].includes(e.target.tagName) || e.target.closest('.node-card')) return; 
-    handleTripleClick(); 
-    panLayer.classList.remove('smooth-move'); 
-    viewport.classList.add('moving');
-    isDragging = true; 
-    startX = e.clientX - translateX; 
-    startY = e.clientY - translateY; 
-    viewport.style.cursor = 'grabbing'; 
+    handleTripleClick(); panLayer.classList.remove('smooth-move'); viewport.classList.add('moving');
+    isDragging = true; startX = e.clientX - translateX; startY = e.clientY - translateY; viewport.style.cursor = 'grabbing'; 
 });
-
-window.addEventListener('mousemove', (e) => { 
-    if (!isDragging) return; 
-    e.preventDefault(); 
-    translateX = e.clientX - startX; 
-    translateY = e.clientY - startY; 
-    updateTransform(); 
-});
-
-window.addEventListener('mouseup', () => { 
-    isDragging = false; 
-    viewport.classList.remove('moving');
-    viewport.style.cursor = 'grab'; 
-});
+window.addEventListener('mousemove', (e) => { if (!isDragging) return; e.preventDefault(); translateX = e.clientX - startX; translateY = e.clientY - startY; updateTransform(); });
+window.addEventListener('mouseup', () => { isDragging = false; viewport.classList.remove('moving'); viewport.style.cursor = 'grab'; });
 
 function getDistance(touches) { return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY); }
 function getCenter(touches) { return { x: (touches[0].clientX + touches[1].clientX) / 2, y: (touches[0].clientY + touches[1].clientY) / 2 }; }
@@ -654,54 +464,34 @@ function getCenter(touches) { return { x: (touches[0].clientX + touches[1].clien
 viewport.addEventListener('touchstart', (e) => { 
     if (e.target.closest('input') || e.target.closest('select') || e.target.closest('button')) return; 
     panLayer.classList.remove('smooth-move'); 
-    
     if (e.touches.length === 1) { 
-        handleTripleClick(); 
-        viewport.classList.add('moving');
-        isDragging = true; 
-        startX = e.touches[0].clientX - translateX; 
-        startY = e.touches[0].clientY - translateY; 
+        handleTripleClick(); viewport.classList.add('moving'); isDragging = true; startX = e.touches[0].clientX - translateX; startY = e.touches[0].clientY - translateY; 
     } else if (e.touches.length === 2) { 
-        isDragging = false; 
-        viewport.classList.add('moving');
-        startDist = getDistance(e.touches); 
-        startScale = scale; 
-        const center = getCenter(e.touches); 
-        startCenterX = center.x; startCenterY = center.y; 
-        startTranslateX = translateX; startTranslateY = translateY; 
+        isDragging = false; viewport.classList.add('moving'); startDist = getDistance(e.touches); startScale = scale; 
+        const center = getCenter(e.touches); startCenterX = center.x; startCenterY = center.y; startTranslateX = translateX; startTranslateY = translateY; 
     } 
 }, { passive: false });
 
 viewport.addEventListener('touchmove', (e) => { 
     e.preventDefault(); 
     if (e.touches.length === 1 && isDragging) { 
-        translateX = e.touches[0].clientX - startX; 
-        translateY = e.touches[0].clientY - startY; 
-        updateTransform(); 
+        translateX = e.touches[0].clientX - startX; translateY = e.touches[0].clientY - startY; updateTransform(); 
     } else if (e.touches.length === 2) { 
-        const currDist = getDistance(e.touches); 
-        const currCenter = getCenter(e.touches); 
+        const currDist = getDistance(e.touches); const currCenter = getCenter(e.touches); 
         let newScale = Math.min(Math.max(0.1, startScale * (currDist / startDist)), 5); 
         const ratio = newScale / startScale; 
-        translateX = currCenter.x - (startCenterX - startTranslateX) * ratio; 
-        translateY = currCenter.y - (startCenterY - startTranslateY) * ratio; 
-        scale = newScale; 
-        updateTransform(); 
-        checkLOD(); 
+        translateX = currCenter.x - (startCenterX - startTranslateX) * ratio; translateY = currCenter.y - (startCenterY - startTranslateY) * ratio; 
+        scale = newScale; updateTransform(); checkLOD(); 
     } 
 }, { passive: false });
 
-viewport.addEventListener('touchend', (e) => { 
-    isDragging = false; 
-    if (e.touches.length === 0) viewport.classList.remove('moving');
-    if (e.touches.length < 2) startDist = 0; 
-});
+viewport.addEventListener('touchend', (e) => { isDragging = false; if (e.touches.length === 0) viewport.classList.remove('moving'); if (e.touches.length < 2) startDist = 0; });
 
 const themeToggleBtn = document.getElementById('themeToggle'); const themes = ['auto', 'light', 'dark']; let currentThemeIndex = 0;
 function applyTheme(t) { document.documentElement.removeAttribute('data-theme'); let sys = window.matchMedia('(prefers-color-scheme: dark)').matches; themeToggleBtn.textContent = `外觀: ${t === 'auto' ? '自動' : (t === 'light' ? '淺色' : '深色')}`; if (t === 'dark' || (t === 'auto' && sys)) document.documentElement.setAttribute('data-theme', 'dark'); else document.documentElement.setAttribute('data-theme', 'light'); }
 themeToggleBtn.addEventListener('click', () => { currentThemeIndex = (currentThemeIndex + 1) % themes.length; applyTheme(themes[currentThemeIndex]); });
 
-function downloadJSON() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2)); a.download = "iHealth_tree_v11_LockView.json"; document.body.appendChild(a); a.click(); a.remove(); }
+function downloadJSON() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2)); a.download = "iHealth_tree_v13.json"; document.body.appendChild(a); a.click(); a.remove(); }
 function importJSON(input) { const f = input.files[0]; if(!f) return; const r = new FileReader(); r.onload = (e) => { try { const d = JSON.parse(e.target.result); const fix = (n) => { if(!n)return; if(n.userID===undefined)n.userID=generateUserID(); if(n.sponsorId===undefined)n.sponsorId=null; if(n.totalBvA===undefined)n.totalBvA=0; if(n.totalBvB===undefined)n.totalBvB=0; if(n.rewards.pairing===undefined)n.rewards=initRewards(); fix(n.pathA); fix(n.pathB); }; fix(d); treeData = d; calculateAndRender(); input.value = ''; } catch(err) { alert('JSON Error'); } }; r.readAsText(f); }
 
 applyTheme('auto'); initData(); calculateAndRender(); window.onload = function() { setTimeout(resetView, 100); };
