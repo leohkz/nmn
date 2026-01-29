@@ -35,11 +35,6 @@
     --c-onetime: #60a5fa; --c-daily: #fbbf24; --c-monthly: #a78bfa; --c-total: #34d399;
 }
 
-/* 全局 Box Sizing，解決尺寸計算跳動的關鍵 */
-*, *::before, *::after {
-    box-sizing: border-box;
-}
-
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background-color: var(--bg-color);
@@ -114,7 +109,7 @@ body {
 .save-indicator { font-size: 0.75rem; color: #10b981; text-align: right; min-width: 60px; }
 .author-credit { text-align: center; margin-top: 20px; margin-bottom: 10px; font-size: 0.7rem; opacity: 0.4; font-family: monospace; letter-spacing: 1px; }
 
-/* --- 效能核心優化 (Final Tuned) --- */
+/* --- 效能核心優化 (GPU + Native Culling) --- */
 .tree-container { 
     flex: 1; width: 100%; height: 100%; overflow: hidden; cursor: grab; position: relative; padding-bottom: 100px; 
     will-change: transform; 
@@ -134,63 +129,68 @@ body {
 .tree { display: flex; flex-direction: column; align-items: center; }
 
 /* 
-   關鍵調整：
-   1. 使用 content-visibility 進行效能優化
-   2. contain-intrinsic-size 必須精確等於 .node-card 的寬高 (178px 290px)，否則會抖動
+   修正重點 1: 
+   為了讓 "浮動" 的按鈕和推薦人標籤不被裁切，
+   我們給 Wrapper 加了 padding-top，並擴大了 contain-intrinsic-size 的高度。
+   
+   Intrinsic Size 計算：
+   原本高度 264px + 頂部 padding 24px = 288px
 */
 .node-wrapper { 
     display: flex; flex-direction: column; align-items: center; position: relative; margin: 0 8px; 
+    
+    /* 新增：為上方的按鈕和標籤預留空間，防止被 paint 邊界裁切 */
+    padding-top: 24px; 
+    
     content-visibility: auto; 
-    /* 150(寬) + 4(border) + 24(pad) = 178px */
-    /* 260(高) + 4(border) + 24(pad) = 288px -> 近似 290px */
-    contain-intrinsic-size: 178px 290px;
+    /* 更新：包含 padding 的預估大小 */
+    contain-intrinsic-size: 154px 288px; 
+    
     contain: layout style paint;
 }
 
 .node-card {
     background-color: var(--card-bg); border: 2px solid var(--line-color); border-radius: 14px;
-    padding: 12px; 
-    
-    /* 固定尺寸 (配合 box-sizing: border-box) */
-    width: 178px; 
-    height: 290px; /* 固定高度，解決塌陷問題 */
-
+    padding: 12px; width: 150px; 
+    height: 260px; 
     box-shadow: var(--node-shadow); position: relative; z-index: 2; 
     display: flex; flex-direction: column; gap: 8px;
     
-    /* 關鍵修復：解決按鈕和推薦人被裁切的問題 */
-    overflow: visible !important; 
-    contain: layout style; /* 移除 contain: content，否則 overflow: visible 無效 */
+    /* 讓子元素 (按鈕) 可以超出卡片邊界 */
+    contain: layout style;
+    overflow: visible;
 }
 
-/* 
-   LOD 模式 (縮小狀態)
-   - 保持卡片大小不變
-   - 隱藏內部元素
-   - 隱藏積分標籤 (line-bv-tag)
-*/
+/* LOD 模式 (縮小變色塊) */
 .tree-container.zoomed-out .node-card {
     box-shadow: none !important;
 }
 
-/* 縮小時隱藏卡片內所有內容 */
+/* LOD 模式：隱藏卡片內部細節 */
 .tree-container.zoomed-out .node-card > * {
     display: none !important;
 }
 
-/* 縮小時也隱藏連線上的積分 (BV) */
+/* LOD 模式：隱藏外掛的按鈕與標籤 */
+.tree-container.zoomed-out .delete-btn,
+.tree-container.zoomed-out .sponsor-btn,
+.tree-container.zoomed-out .sponsor-label {
+    display: none !important;
+}
+
+/* LOD 模式：隱藏連線上的 BV 積分標籤 */
 .tree-container.zoomed-out .line-bv-tag {
     display: none !important;
 }
 
-/* 可選：縮小時保留一點 Level 顏色提示 */
-.tree-container.zoomed-out .node-card[data-level="L1"] { background: var(--tag-l1); opacity: 0.6; border-color: transparent; }
-.tree-container.zoomed-out .node-card[data-level="L2"] { background: var(--tag-l2); opacity: 0.6; border-color: transparent; }
-.tree-container.zoomed-out .node-card[data-level="L3"] { background: var(--tag-l3); opacity: 0.6; border-color: transparent; }
-.tree-container.zoomed-out .node-card[data-level="L4"] { background: var(--tag-l4); opacity: 0.6; border-color: transparent; }
+/* Level 顏色提示 */
+.tree-container.zoomed-out .node-card[data-level="L1"] { border-color: var(--tag-l1-text); background: var(--tag-l1); opacity: 0.5; }
+.tree-container.zoomed-out .node-card[data-level="L2"] { border-color: var(--tag-l2-text); background: var(--tag-l2); opacity: 0.5; }
+.tree-container.zoomed-out .node-card[data-level="L3"] { border-color: var(--tag-l3-text); background: var(--tag-l3); opacity: 0.5; }
+.tree-container.zoomed-out .node-card[data-level="L4"] { border-color: var(--tag-l4-text); background: var(--tag-l4); opacity: 0.5; }
 
 
-/* 拖動時 (Moving State) */
+/* 拖動時 (Moving) */
 .tree-container.moving .node-card {
     box-shadow: none !important;
     pointer-events: none;
@@ -215,12 +215,22 @@ body {
 
 .node-card.edit-mode { z-index: 100; border-color: var(--btn-primary); transform: scale(1.05); box-shadow: 0 0 0 4px rgba(0,113,227, 0.2), 0 10px 24px rgba(0,0,0,0.15); }
 
+/* 
+   修正重點 2: 
+   調整按鈕的 top 定位，確保它們在新的 padding 區域內顯示良好。
+   雖然還是 top: -12px，但因為父容器有 padding-top: 24px，所以實際上它們現在位於可見區域。
+*/
 .delete-btn, .sponsor-btn { position: absolute; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.3); z-index: 20; opacity: 0; transform: scale(0.5); pointer-events: none; transition: all 0.2s; }
 .delete-btn { top: -12px; right: -12px; background: #ff3b30; color: white; font-size: 18px; cursor: pointer; }
 .sponsor-btn { top: -12px; left: -12px; background: var(--btn-primary); color: white; font-size: 16px; cursor: pointer; }
 @media (hover: hover) { .node-card:hover .delete-btn, .node-card:hover .sponsor-btn { opacity: 1; transform: scale(1); pointer-events: auto; } }
 .node-card.edit-mode .delete-btn, .node-card.edit-mode .sponsor-btn { opacity: 1; transform: scale(1); pointer-events: auto; }
-.sponsor-label { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 0.6rem; color: var(--text-color); opacity: 0.8; font-weight: 600; pointer-events: none; white-space: nowrap; background: var(--bg-color); padding: 1px 4px; border-radius: 4px; border: 1px solid var(--line-color); }
+
+/* 
+   修正重點 3: 
+   推薦人標籤樣式。之前因為在 paint 邊界外被隱藏，現在可以看到它了。
+*/
+.sponsor-label { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 0.6rem; color: var(--text-color); opacity: 0.8; font-weight: 600; pointer-events: none; white-space: nowrap; background: var(--bg-color); padding: 1px 4px; border-radius: 4px; border: 1px solid var(--line-color); z-index: 15; }
 
 .node-header { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line-color); }
 .node-name-input { width: 100%; border: none; background: transparent; text-align: center; color: var(--text-color); outline: none; font-size: 1rem; font-weight: 700; margin-bottom: 2px; }
