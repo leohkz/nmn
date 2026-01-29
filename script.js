@@ -1,6 +1,6 @@
 const surnames = ["陳", "林", "黃", "張", "李", "王", "吳", "劉", "蔡"];
 const names = ["大文", "小明", "志豪", "雅婷", "淑芬", "偉雄", "家豪", "怡君"];
-const STORAGE_KEY = 'iHealth_Tree_Calc_v13_AnchorFix';
+const STORAGE_KEY = 'iHealth_Tree_Calc_v14_HiddenEasterEgg';
 
 function getRandomName() { return surnames[Math.floor(Math.random() * surnames.length)] + names[Math.floor(Math.random() * names.length)]; }
 function generateUserID() { return Math.floor(100000 + Math.random() * 900000).toString(); }
@@ -105,36 +105,61 @@ function calculateGlobalStats() {
     updatePayoutDisplay();
 }
 
+// 修正 1: 移除文字提示
 function updatePayoutDisplay() {
     const labelEl = document.getElementById('payoutLabel');
     const valEl = document.getElementById('statTotalPayout');
+    
     if (showRevenue) {
-        labelEl.textContent = '總公司營收 (復購 + 開店)'; labelEl.style.color = '#f59e0b';
-        valEl.textContent = `$${revenueData.total.toLocaleString()} ($${revenueData.reship.toLocaleString()} + $${revenueData.signup.toLocaleString()})`; valEl.style.fontSize = '0.9rem';
+        labelEl.textContent = '總公司營收 (復購 + 開店)'; // 顯示時的標題
+        labelEl.style.color = '#f59e0b';
+        valEl.textContent = `$${revenueData.total.toLocaleString()} ($${revenueData.reship.toLocaleString()} + $${revenueData.signup.toLocaleString()})`; 
+        valEl.style.fontSize = '0.9rem';
     } else {
-        labelEl.textContent = '總發放獎金 (長按看營收)'; labelEl.style.color = 'inherit';
-        valEl.textContent = '$' + payoutValue.toLocaleString(); valEl.style.fontSize = '1.1rem';
+        // 隱藏時（預設）不顯示提示
+        labelEl.textContent = '總發放獎金'; 
+        labelEl.style.color = 'inherit';
+        valEl.textContent = '$' + payoutValue.toLocaleString(); 
+        valEl.style.fontSize = '1.1rem';
     }
 }
 
-// Payout Box Long Press
+// Payout Box Long Press (Hidden Easter Egg)
 const payoutBox = document.getElementById('payoutBox');
 const progress = document.getElementById('holdProgress');
 let holdDuration = 3000; let holdStartTime = 0; let holdFrame = null;
 
 function startHold(e) {
     if (e.type === 'touchstart') e.preventDefault(); 
-    holdStartTime = Date.now(); showRevenue = false; updatePayoutDisplay();
+    holdStartTime = Date.now(); 
+    showRevenue = false; 
+    updatePayoutDisplay();
+    
     function animate() {
         let elapsed = Date.now() - holdStartTime;
-        let pct = Math.min((elapsed / holdDuration) * 100, 100);
-        progress.style.width = pct + '%';
-        if (elapsed >= holdDuration) { showRevenue = true; updatePayoutDisplay(); if (navigator.vibrate) navigator.vibrate(100); return; }
+        // 修正 2: 移除進度條動畫邏輯，保持靜默
+        // let pct = Math.min((elapsed / holdDuration) * 100, 100);
+        // progress.style.width = pct + '%';
+        
+        if (elapsed >= holdDuration) { 
+            showRevenue = true; 
+            updatePayoutDisplay(); 
+            // 觸發震動提示功能已啟用
+            if (navigator.vibrate) navigator.vibrate(100); 
+            return; 
+        }
         holdFrame = requestAnimationFrame(animate);
     }
     holdFrame = requestAnimationFrame(animate);
 }
-function endHold() { cancelAnimationFrame(holdFrame); progress.style.width = '0%'; showRevenue = false; updatePayoutDisplay(); }
+
+function endHold() { 
+    cancelAnimationFrame(holdFrame); 
+    // 確保進度條隱藏（雖然已經不顯示了，但保持重置是好習慣）
+    if(progress) progress.style.width = '0%'; 
+    showRevenue = false; 
+    updatePayoutDisplay(); 
+}
 
 payoutBox.addEventListener('mousedown', startHold); payoutBox.addEventListener('touchstart', startHold);
 payoutBox.addEventListener('mouseup', endHold); payoutBox.addEventListener('mouseleave', endHold); payoutBox.addEventListener('touchend', endHold);
@@ -217,18 +242,13 @@ function buildCache(node, parent) { if (!node) return; nodesCache[node.id] = nod
 function resetRewards(node) { if (!node) return; node.rewards = initRewards(); node.totalBvA = 0; node.totalBvB = 0; resetRewards(node.pathA); resetRewards(node.pathB); }
 function calculateAndRender(render = true) { calculateBonuses(); if(render) renderTree(false); }
 
-// --- NODE OPERATIONS & ANCHOR FIX ---
+// --- NODE OPERATIONS ---
 
-// 1. 修正：透過對比父節點在渲染前後的絕對位置，來修正跳動
 function addNode(parentId, pathKey) {
-    // A. 記錄渲染前父節點的位置 (相對於 Viewport)
     const parentNodeOld = document.getElementById(`card-${parentId}`);
     let rectOld;
-    if (parentNodeOld) {
-        rectOld = parentNodeOld.getBoundingClientRect();
-    }
+    if (parentNodeOld) { rectOld = parentNodeOld.getBoundingClientRect(); }
 
-    // B. 更新數據
     const parent = findNode(treeData, parentId);
     if (parent) {
         parent[pathKey] = {
@@ -237,26 +257,16 @@ function addNode(parentId, pathKey) {
             rewards: initRewards(), totalBvA: 0, totalBvB: 0
         };
         
-        // C. 重新渲染
         calculateAndRender();
 
-        // D. 坐標錨定補償 (Anchor Compensation)
-        // 渲染後，樹的結構變了，父節點可能被推到別的地方去了。
-        // 我們計算它跑了多遠，然後把 Viewport 移回來，讓使用者感覺「它沒動」。
         if (rectOld) {
-            // 由於 DOM 已重建，需重新抓取元素
             const parentNodeNew = document.getElementById(`card-${parentId}`);
             if (parentNodeNew) {
                 const rectNew = parentNodeNew.getBoundingClientRect();
-                
-                // 計算位移差 (Delta)
                 const dx = rectNew.left - rectOld.left;
                 const dy = rectNew.top - rectOld.top;
-                
-                // 如果位移過大 (例如異常跳動)，或者僅是微小位移，都進行修正
                 if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-                    translateX -= dx;
-                    translateY -= dy;
+                    translateX -= dx; translateY -= dy;
                     updateTransform();
                 }
             }
@@ -274,15 +284,31 @@ function updateNodeData(id, key, value) {
     } 
 }
 
+// 修正 3: 隨機生成 L2 ~ L4 的節點
 function bulkAdd(count) {
     let added = 0;
+    const possibleLevels = ['L2', 'L3', 'L4'];
+    
     for (let i = 0; i < count; i++) {
         let allNodes = []; collectAllDescendants(treeData, allNodes);
         let candidates = allNodes.filter(n => !n.pathA || !n.pathB);
         if (candidates.length === 0) break;
         let parent = candidates[Math.floor(Math.random() * candidates.length)];
         let pathKey = (!parent.pathA && !parent.pathB) ? (Math.random() > 0.5 ? 'pathA' : 'pathB') : (!parent.pathA ? 'pathA' : 'pathB');
-        parent[pathKey] = { id: Date.now().toString() + Math.random().toString().substr(2, 5), userID: generateUserID(), name: getRandomName(), level: 'L4', sponsorId: parent.id, pathA: null, pathB: null, rewards: initRewards(), totalBvA: 0, totalBvB: 0 };
+        
+        // 隨機選擇等級
+        const randomLevel = possibleLevels[Math.floor(Math.random() * possibleLevels.length)];
+        
+        parent[pathKey] = { 
+            id: Date.now().toString() + Math.random().toString().substr(2, 5), 
+            userID: generateUserID(), 
+            name: getRandomName(), 
+            level: randomLevel,  // 套用隨機等級
+            sponsorId: parent.id, 
+            pathA: null, pathB: null, 
+            rewards: initRewards(), 
+            totalBvA: 0, totalBvB: 0 
+        };
         added++;
     }
     calculateAndRender();
@@ -315,23 +341,15 @@ function findParent(root, childId) { if (!root) return null; if ((root.pathA && 
 
 // --- RENDERING ---
 
-// 2. 修正：強制重繪以避免白屏 (解決 Chrome/Safari 硬體加速 Bug)
 function forceRepaint() {
-    // 微調 opacity 觸發 GPU 合成層更新，解決消失問題
     panLayer.style.opacity = '0.99'; 
-    requestAnimationFrame(() => {
-        panLayer.style.opacity = '';
-    });
+    requestAnimationFrame(() => { panLayer.style.opacity = ''; });
 }
 
 function renderTree(centerView = true) {
     nodesCache = {}; parentMap = {}; buildCache(treeData, null);
     treeRootEl.innerHTML = ''; treeRootEl.appendChild(createNodeElement(treeData));
-    
-    // 初始化時才重置視角，其他時候保持不動
     if (centerView) resetView();
-    
-    // 渲染後強制重繪
     forceRepaint();
 }
 
@@ -382,7 +400,6 @@ function createBranch(parentNode, pathKey) {
     else { 
         const addBtn = document.createElement('button'); addBtn.className = 'add-btn'; addBtn.textContent = '+'; 
         addBtn.onclick = (e) => {
-            // 點擊新增
             addNode(parentNode.id, pathKey); 
         };
         addBtn.ontouchstart = (e) => e.stopPropagation(); 
@@ -491,7 +508,7 @@ const themeToggleBtn = document.getElementById('themeToggle'); const themes = ['
 function applyTheme(t) { document.documentElement.removeAttribute('data-theme'); let sys = window.matchMedia('(prefers-color-scheme: dark)').matches; themeToggleBtn.textContent = `外觀: ${t === 'auto' ? '自動' : (t === 'light' ? '淺色' : '深色')}`; if (t === 'dark' || (t === 'auto' && sys)) document.documentElement.setAttribute('data-theme', 'dark'); else document.documentElement.setAttribute('data-theme', 'light'); }
 themeToggleBtn.addEventListener('click', () => { currentThemeIndex = (currentThemeIndex + 1) % themes.length; applyTheme(themes[currentThemeIndex]); });
 
-function downloadJSON() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2)); a.download = "iHealth_tree_v13.json"; document.body.appendChild(a); a.click(); a.remove(); }
+function downloadJSON() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2)); a.download = "iHealth_tree_v14.json"; document.body.appendChild(a); a.click(); a.remove(); }
 function importJSON(input) { const f = input.files[0]; if(!f) return; const r = new FileReader(); r.onload = (e) => { try { const d = JSON.parse(e.target.result); const fix = (n) => { if(!n)return; if(n.userID===undefined)n.userID=generateUserID(); if(n.sponsorId===undefined)n.sponsorId=null; if(n.totalBvA===undefined)n.totalBvA=0; if(n.totalBvB===undefined)n.totalBvB=0; if(n.rewards.pairing===undefined)n.rewards=initRewards(); fix(n.pathA); fix(n.pathB); }; fix(d); treeData = d; calculateAndRender(); input.value = ''; } catch(err) { alert('JSON Error'); } }; r.readAsText(f); }
 
 applyTheme('auto'); initData(); calculateAndRender(); window.onload = function() { setTimeout(resetView, 100); };
