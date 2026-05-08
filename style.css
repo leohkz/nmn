@@ -16,8 +16,9 @@
     --stats-bg: rgba(255, 255, 255, 0.95); --stats-border: #e5e5e5;
     --danger-bg: #fee2e2; --danger-text: #ef4444; --danger-border: #fca5a5;
 
-    /* Bonus Type Colors */
     --c-onetime: #3b82f6; --c-daily: #f59e0b; --c-monthly: #8b5cf6; --c-total: #10b981;
+    --c-onetime-text: #f59e0b;
+    --c-monthly-text: #10b981;
 }
 
 [data-theme="dark"] {
@@ -33,6 +34,8 @@
     --danger-bg: rgba(220, 38, 38, 0.2); --danger-text: #f87171; --danger-border: #7f1d1d;
     
     --c-onetime: #60a5fa; --c-daily: #fbbf24; --c-monthly: #a78bfa; --c-total: #34d399;
+    --c-onetime-text: #fbbf24;
+    --c-monthly-text: #34d399;
 }
 
 body {
@@ -123,10 +126,6 @@ body {
     transform-origin: 0 0; 
     transform: translate3d(0,0,0); 
     will-change: transform;
-    
-    /* 修正重點 1：移除 content-visibility 以避免螢幕外渲染消失 Bug */
-    /* content-visibility: auto;  <-- REMOVED */
-    
     contain: layout style;
     backface-visibility: hidden;
     perspective: 1000px;
@@ -135,31 +134,33 @@ body {
 
 .tree { display: flex; flex-direction: column; align-items: center; }
 
-/* Node Wrapper & Card 樣式 */
+/* ========================================
+   NODE CARD — 自適應高度版
+   寬度加到 176px，高度自動撐開
+   ======================================== */
 .node-wrapper { 
     display: flex; flex-direction: column; align-items: center; position: relative; margin: 0 8px; 
     padding-top: 24px; 
     padding-left: 16px; 
     padding-right: 16px;
-    
-    /* 修正重點 2：雖然移除了 content-visibility，仍保留 intrinsic-size 供 layout 參考 */
-    contain-intrinsic-size: 186px 310px; 
     contain: layout style paint;
 }
 
 .node-card {
-    background-color: var(--card-bg); border: 2px solid var(--line-color); border-radius: 14px;
-    padding: 12px; width: 150px; 
-    
-    /* 高度確保能容納所有獎金項目 */
-    height: 280px; 
-    
-    box-shadow: var(--node-shadow); position: relative; z-index: 2; 
-    display: flex; flex-direction: column; gap: 8px;
-    
+    background-color: var(--card-bg);
+    border: 2px solid var(--line-color);
+    border-radius: 14px;
+    padding: 10px 10px 8px 10px;
+    /* 寬度加大，讓數字有空間 */
+    width: 176px;
+    /* 高度自適應，不再固定 */
+    height: auto;
+    min-height: 120px;
+    box-shadow: var(--node-shadow);
+    position: relative; z-index: 2; 
+    display: flex; flex-direction: column; gap: 0;
     contain: layout style;
     overflow: visible;
-
     -webkit-user-select: none;
     -webkit-touch-callout: none;
     user-select: none;
@@ -190,9 +191,7 @@ body {
     box-shadow: none !important;
     pointer-events: none;
 }
-.tree-container.moving .line-bv-tag {
-    opacity: 0;
-}
+.tree-container.moving .line-bv-tag { opacity: 0; }
 
 .children-container { display: flex; flex-direction: row; justify-content: center; padding-top: 36px; position: relative; }
 .children-container::before { content: ''; position: absolute; top: 0; left: 50%; width: 2px; height: 36px; background-color: var(--line-color); transform: translateX(-50%); }
@@ -220,25 +219,95 @@ body {
 /* 推薦人標籤 */
 .sponsor-label { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 0.6rem; color: var(--text-color); opacity: 0.8; font-weight: 600; pointer-events: none; white-space: nowrap; background: var(--bg-color); padding: 1px 4px; border-radius: 4px; border: 1px solid var(--line-color); z-index: 15; }
 
-.node-header { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line-color); }
-.node-name-input { width: 100%; border: none; background: transparent; text-align: center; color: var(--text-color); outline: none; font-size: 1rem; font-weight: 700; margin-bottom: 2px; }
-.node-userid-input { width: 100%; border: none; background: transparent; text-align: center; color: var(--text-color); outline: none; font-size: 0.75rem; font-family: monospace; opacity: 0.6; }
+/* ---- Node Header ---- */
+.node-header { 
+    display: flex; flex-direction: column; align-items: center; gap: 3px; 
+    margin-bottom: 6px; padding-bottom: 7px; 
+    border-bottom: 1px solid var(--line-color); 
+}
+.node-name-input { width: 100%; border: none; background: transparent; text-align: center; color: var(--text-color); outline: none; font-size: 0.95rem; font-weight: 700; }
+.node-userid-input { width: 100%; border: none; background: transparent; text-align: center; color: var(--text-color); outline: none; font-size: 0.7rem; font-family: monospace; opacity: 0.6; }
 .node-level-select { width: 90%; border: none; border-radius: 6px; padding: 4px 0; font-size: 0.8rem; text-align: center; text-align-last: center; cursor: pointer; font-weight: 700; appearance: none; -webkit-appearance: none; background-image: none; }
 .node-card[data-level="L1"] .node-level-select { background-color: var(--tag-l1); color: var(--tag-l1-text); }
 .node-card[data-level="L2"] .node-level-select { background-color: var(--tag-l2); color: var(--tag-l2-text); }
 .node-card[data-level="L3"] .node-level-select { background-color: var(--tag-l3); color: var(--tag-l3-text); }
 .node-card[data-level="L4"] .node-level-select { background-color: var(--tag-l4); color: var(--tag-l4-text); }
 
-/* 獎金列表 */
-.bonus-list { flex: 1; display: flex; flex-direction: column; gap: 3px; font-size: 0.7rem; overflow: hidden; padding-top: 4px; justify-content: flex-start; }
-.bonus-row { display: flex; justify-content: space-between; align-items: center; min-height: 16px; }
-.bonus-label { opacity: 0.8; display: flex; align-items: center; gap: 6px; }
-.bonus-val { font-family: monospace; font-weight: 600; font-size: 0.75rem; }
-.badge { padding: 1px 4px; border-radius: 4px; font-size: 0.6rem; color: white; font-weight: bold; min-width: 24px; text-align: center; }
-.b-onetime { background-color: var(--c-onetime); } .b-daily { background-color: var(--c-daily); } .b-monthly { background-color: var(--c-monthly); }
-.total-row { margin-top: auto; border-top: 2px solid var(--line-color); padding-top: 6px; display: flex; justify-content: space-between; align-items: flex-end; }
-.total-label { font-size: 0.75rem; font-weight: bold; opacity: 0.9; }
-.total-val { font-size: 1.2rem; font-weight: 800; color: var(--c-total); font-family: monospace; }
+/* ========================================
+   獎金分區：一次性 / 月收入
+   ======================================== */
+.bonus-section {
+    margin-bottom: 5px;
+}
+.bonus-section-title {
+    font-size: 0.6rem;
+    font-weight: 700;
+    opacity: 0.5;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+    padding-bottom: 2px;
+    border-bottom: 1px dashed var(--line-color);
+}
+
+/* 每一行獎金 */
+.bonus-row { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    min-height: 18px;
+    padding: 1px 0;
+}
+.bonus-label { opacity: 0.85; display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.bonus-val { 
+    font-family: monospace; 
+    font-weight: 700; 
+    font-size: 0.78rem; 
+    color: var(--text-color);
+    /* 確保數字不換行，右對齊 */
+    white-space: nowrap;
+    text-align: right;
+    flex-shrink: 0;
+    margin-left: 4px;
+}
+.badge { 
+    padding: 1px 5px; 
+    border-radius: 4px; 
+    font-size: 0.58rem; 
+    color: white; 
+    font-weight: bold; 
+    /* 固定最小寬度讓標籤整齊 */
+    min-width: 30px; 
+    text-align: center; 
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+.b-onetime { background-color: var(--c-onetime); }
+.b-daily { background-color: var(--c-daily); }
+.b-monthly { background-color: var(--c-monthly); }
+
+/* ========================================
+   總獎金 Footer — 拆成兩行
+   ======================================== */
+.total-row.total-split {
+    margin-top: 6px;
+    border-top: 2px solid var(--line-color);
+    padding-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.total-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.total-label { font-size: 0.7rem; font-weight: 600; opacity: 0.7; }
+.total-val { font-family: monospace; font-weight: 800; font-size: 0.95rem; white-space: nowrap; }
+/* 一次性 = 橙色 */
+.onetime-val { color: var(--c-onetime-text); }
+/* 月收入 = 綠色 */
+.monthly-val { color: var(--c-monthly-text); }
 
 .add-btn { width: 54px; height: 54px; border-radius: 50%; border: 3px dashed var(--line-color); background: transparent; color: var(--line-color); font-size: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; margin-top: 10px; }
 .add-btn:active { border-color: var(--btn-primary); color: var(--btn-primary); background-color: var(--card-bg); }
