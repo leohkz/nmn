@@ -33,8 +33,8 @@ function initData() {
 function initRewards() {
     return {
         referral: 0, product: 0,
-        pairing_signup: 0,  // 一次性開店對碰
-        pairing_reship: 0,  // 月復購對碰
+        pairing_signup: 0,
+        pairing_reship: 0,
         lucky: 0, reship: 0, rank: 0, achievement: 0, dinner: 0
     };
 }
@@ -164,9 +164,7 @@ payoutBox.addEventListener('mousedown', startHold); payoutBox.addEventListener('
 payoutBox.addEventListener('mouseup', endHold); payoutBox.addEventListener('mouseleave', endHold); payoutBox.addEventListener('touchend', endHold);
 
 // --- BONUS CALCULATION HELPERS ---
-// 開店（一次性）BV
 function getNodeSignupBV(level) { if (level === 'L2') return 80; if (level === 'L3') return 500; if (level === 'L4') return 1000; return 0; }
-// 復購（每月）BV，復購80BV但對碰只算40BV
 function getNodeReshipBV(level) { if (level === 'L1') return 0; return 40; }
 
 function getSponsorReward(level) {
@@ -177,22 +175,15 @@ function getSponsorReward(level) {
 }
 function collectAllDescendants(startNode, list) { if (!startNode) return; list.push(startNode); collectAllDescendants(startNode.pathA, list); collectAllDescendants(startNode.pathB, list); }
 
-// --- 晉級獎計算 ---
-// 每1000人 = $1000，封頂 $100,000
-// 特定節點: 100,300,500 後每1000遞增至100000
 function calcRankBonus(teamCount) {
     if (teamCount < 100) return 0;
     if (teamCount < 300) return 100;
     if (teamCount < 500) return 300;
     if (teamCount < 1000) return 500;
-    // 1000起每多1000加1000，封頂100000
     const thousands = Math.floor(teamCount / 1000);
     return Math.min(thousands * 1000, 100000);
 }
 
-// --- 成就獎計算 ---
-// 節點: 100,300,500,1000,3000,5000,10000,30000,50000,100000
-// 每個節點金額 = 人數 × 10（一次性累加）
 function calcAchievementBonus(teamCount) {
     const milestones = [100, 300, 500, 1000, 3000, 5000, 10000, 30000, 50000, 100000];
     let total = 0;
@@ -207,7 +198,6 @@ function calculateBonuses() {
     resetRewards(treeData); nodesCache = {}; parentMap = {}; buildCache(treeData, null);
     const allNodes = Object.values(nodesCache);
 
-    // 1. Subtree BV — 分開計算開店BV和復購BV
     allNodes.forEach(node => {
         let leftNodes = []; collectAllDescendants(node.pathA, leftNodes);
         let rightNodes = []; collectAllDescendants(node.pathB, rightNodes);
@@ -227,15 +217,12 @@ function calculateBonuses() {
                 node.totalBvB_reship += getNodeReshipBV(child.level);
             }
         });
-        // 保留舊的totalBvA/B供BV標籤顯示（開店+復購合計）
         node.totalBvA = node.totalBvA_signup + node.totalBvA_reship;
         node.totalBvB = node.totalBvB_signup + node.totalBvB_reship;
     });
 
-    // 2. Pairing — 分開計算一次性開店對碰 和 月復購對碰
     calculatePairingBonus(treeData);
 
-    // 3. Sponsor & Lucky（幸運獎封頂$2000/月）
     allNodes.forEach(node => {
         let curr = node; let generation = 1;
         let tempSponsor = nodesCache[curr.sponsorId];
@@ -252,7 +239,6 @@ function calculateBonuses() {
             const nodePairing = node.rewards.pairing_signup + node.rewards.pairing_reship;
             if (nodePairing > 0) {
                 tempSponsor.rewards.lucky += (nodePairing * 0.1);
-                // 幸運獎封頂 $2,000
                 if (tempSponsor.rewards.lucky > 2000) tempSponsor.rewards.lucky = 2000;
             }
             if (tempSponsor.sponsorId) tempSponsor = nodesCache[tempSponsor.sponsorId]; else tempSponsor = null;
@@ -260,7 +246,6 @@ function calculateBonuses() {
         }
     });
 
-    // 4. Rank + Achievement + Dinner
     allNodes.forEach(node => {
         let teamCount = 0; let stack = [];
         if(node.pathA) stack.push(node.pathA); if(node.pathB) stack.push(node.pathB);
@@ -279,10 +264,8 @@ function calculateBonuses() {
 
 function calculatePairingBonus(node) {
     if (!node) return;
-    // 開店對碰（一次性）
     const signupPair = Math.min(node.totalBvA_signup || 0, node.totalBvB_signup || 0);
     node.rewards.pairing_signup = signupPair > 0 ? Math.round(signupPair * 0.15 * 100) / 100 : 0;
-    // 復購對碰（每月）
     const reshipPair = Math.min(node.totalBvA_reship || 0, node.totalBvB_reship || 0);
     node.rewards.pairing_reship = reshipPair > 0 ? Math.round(reshipPair * 0.15 * 100) / 100 : 0;
     calculatePairingBonus(node.pathA);
@@ -316,19 +299,13 @@ function addNode(parentId, pathKey) {
             totalBvA_signup: 0, totalBvB_signup: 0,
             totalBvA_reship: 0, totalBvB_reship: 0
         };
-
         calculateAndRender();
-
         if (rectOld) {
             const parentNodeNew = document.getElementById(`card-${parentId}`);
             if (parentNodeNew) {
                 const rectNew = parentNodeNew.getBoundingClientRect();
-                const dx = rectNew.left - rectOld.left;
-                const dy = rectNew.top - rectOld.top;
-                if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-                    translateX -= dx; translateY -= dy;
-                    updateTransform();
-                }
+                const dx = rectNew.left - rectOld.left; const dy = rectNew.top - rectOld.top;
+                if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) { translateX -= dx; translateY -= dy; updateTransform(); }
             }
         }
     }
@@ -338,35 +315,25 @@ function deleteNode(nodeId) { if(nodeId === 'root' || !confirm("確定刪除？"
 
 function updateNodeData(id, key, value) {
     const node = findNode(treeData, id);
-    if (node) {
-        node[key] = value;
-        if (key === 'level') calculateAndRender(true); else saveData();
-    }
+    if (node) { node[key] = value; if (key === 'level') calculateAndRender(true); else saveData(); }
 }
 
 function bulkAdd(count) {
     let added = 0;
     const possibleLevels = ['L2', 'L3', 'L4'];
-
     for (let i = 0; i < count; i++) {
         let allNodes = []; collectAllDescendants(treeData, allNodes);
         let candidates = allNodes.filter(n => !n.pathA || !n.pathB);
         if (candidates.length === 0) break;
         let parent = candidates[Math.floor(Math.random() * candidates.length)];
         let pathKey = (!parent.pathA && !parent.pathB) ? (Math.random() > 0.5 ? 'pathA' : 'pathB') : (!parent.pathA ? 'pathA' : 'pathB');
-
         const randomLevel = possibleLevels[Math.floor(Math.random() * possibleLevels.length)];
-
         parent[pathKey] = {
             id: Date.now().toString() + Math.random().toString().substr(2, 5),
-            userID: generateUserID(),
-            name: getRandomName(),
-            level: randomLevel,
-            sponsorId: parent.id,
-            pathA: null, pathB: null,
+            userID: generateUserID(), name: getRandomName(), level: randomLevel,
+            sponsorId: parent.id, pathA: null, pathB: null,
             rewards: initRewards(), totalBvA: 0, totalBvB: 0,
-            totalBvA_signup: 0, totalBvB_signup: 0,
-            totalBvA_reship: 0, totalBvB_reship: 0
+            totalBvA_signup: 0, totalBvB_signup: 0, totalBvA_reship: 0, totalBvB_reship: 0
         };
         added++;
     }
@@ -441,41 +408,45 @@ function createNodeElement(nodeData) {
     const r = nodeData.rewards;
 
     // --- 一次性收入區塊 ---
-    const onetimeTotal = r.referral + r.pairing_signup + r.achievement;
+    // 包含：直推現金、產品卡、開店對碰、成就獎
+    const onetimeTotal = r.referral + r.product + r.pairing_signup + r.achievement;
     if (onetimeTotal > 0) {
-        const onetimeSection = document.createElement('div');
-        onetimeSection.className = 'bonus-section';
-        onetimeSection.innerHTML = `<div class="bonus-section-title">🔔 一次性收入</div>`;
+        const sec = document.createElement('div'); sec.className = 'bonus-section';
+        sec.innerHTML = `<div class="bonus-section-title">🔔 一次性收入</div>`;
         const addRow = (label, val, typeClass) => {
             if (val <= 0) return;
-            onetimeSection.innerHTML += `<div class="bonus-row"><div class="bonus-label"><span class="badge ${typeClass}">${label}</span></div><span class="bonus-val">$${Math.round(val).toLocaleString()}</span></div>`;
+            sec.innerHTML += `<div class="bonus-row"><div class="bonus-label"><span class="badge ${typeClass}">${label}</span></div><span class="bonus-val">$${Math.round(val).toLocaleString()}</span></div>`;
         };
-        addRow('直推', r.referral, 'b-onetime');
+        addRow('直推現金', r.referral, 'b-onetime');
+        addRow('產品卡', r.product, 'b-onetime');
         addRow('開店對碰', r.pairing_signup, 'b-onetime');
         addRow('成就', r.achievement, 'b-onetime');
-        card.appendChild(onetimeSection);
+        card.appendChild(sec);
     }
 
     // --- 月收入區塊 ---
+    // 包含：復購對碰、幸運獎、復購獎、晉級獎
     const monthlyTotal = r.pairing_reship + r.lucky + r.reship + r.rank;
     if (monthlyTotal > 0) {
-        const monthlySection = document.createElement('div');
-        monthlySection.className = 'bonus-section';
-        monthlySection.innerHTML = `<div class="bonus-section-title">📅 月收入</div>`;
+        const sec2 = document.createElement('div'); sec2.className = 'bonus-section';
+        sec2.innerHTML = `<div class="bonus-section-title">📅 月收入</div>`;
         const addRow2 = (label, val, typeClass) => {
             if (val <= 0) return;
-            monthlySection.innerHTML += `<div class="bonus-row"><div class="bonus-label"><span class="badge ${typeClass}">${label}</span></div><span class="bonus-val">$${Math.round(val).toLocaleString()}</span></div>`;
+            sec2.innerHTML += `<div class="bonus-row"><div class="bonus-label"><span class="badge ${typeClass}">${label}</span></div><span class="bonus-val">$${Math.round(val).toLocaleString()}</span></div>`;
         };
         addRow2('復購對碰', r.pairing_reship, 'b-daily');
         addRow2('幸運', r.lucky, 'b-daily');
         addRow2('復購', r.reship, 'b-monthly');
         addRow2('晉級', r.rank, 'b-monthly');
-        card.appendChild(monthlySection);
+        card.appendChild(sec2);
     }
 
-    const total = onetimeTotal + monthlyTotal + r.dinner;
-    const footer = document.createElement('div'); footer.className = 'total-row';
-    footer.innerHTML = `<span class="total-label">總獎金</span><span class="total-val">$${Math.round(total).toLocaleString()}</span>`;
+    // --- 總獎金 Footer：拆成一次性 + 月收入兩行 ---
+    const footer = document.createElement('div'); footer.className = 'total-row total-split';
+    footer.innerHTML = [
+        onetimeTotal > 0 ? `<div class="total-line"><span class="total-label">一次性</span><span class="total-val onetime-val">$${Math.round(onetimeTotal).toLocaleString()}</span></div>` : '',
+        monthlyTotal > 0 ? `<div class="total-line"><span class="total-label">月收入</span><span class="total-val monthly-val">$${Math.round(monthlyTotal).toLocaleString()}</span></div>` : '',
+    ].join('');
     card.appendChild(footer);
 
     wrapper.appendChild(card);
