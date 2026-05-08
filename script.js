@@ -13,12 +13,11 @@ let revenueData = { signup: 0, reship: 0, total: 0 };
 let payoutValue = 0;
 
 // --- Gen Table Manual Override ---
-// genOverrides[i] = number if manually set, null if auto
-let genOverrides = [null, null, null, null, null, null, null, null]; // index 0 = gen1 ... index 7 = gen8
-let genExtraOverride = null; // 8代以外手動值
+let genOverrides = [null, null, null, null, null, null, null, null];
+let genExtraOverride = null;
 
-// --- Hide Children State ---
-let childrenHidden = false;
+// --- Hide Children State (default: hidden) ---
+let childrenHidden = true;
 
 // --- Initialization ---
 function initData() {
@@ -60,19 +59,26 @@ function toggleBonusDetails() {
 }
 
 // --- Hide / Show Children ---
-function toggleHideChildren() {
-    childrenHidden = !childrenHidden;
+function applyHideState() {
     const btn = document.getElementById('hideChildrenBtn');
     if (childrenHidden) {
         btn.textContent = '🙈 隱藏所有下線';
         btn.classList.add('active');
-        // 隱藏 treeRoot 下所有 children-container
         document.querySelectorAll('#treeRoot .children-container').forEach(el => { el.style.display = 'none'; });
+        // show BV summary on each card
+        document.querySelectorAll('#treeRoot .bv-summary').forEach(el => { el.style.display = 'flex'; });
     } else {
         btn.textContent = '🌲 顯示所有下線';
         btn.classList.remove('active');
         document.querySelectorAll('#treeRoot .children-container').forEach(el => { el.style.display = ''; });
+        // hide BV summary (it's embedded in the tree lines when visible)
+        document.querySelectorAll('#treeRoot .bv-summary').forEach(el => { el.style.display = 'none'; });
     }
+}
+
+function toggleHideChildren() {
+    childrenHidden = !childrenHidden;
+    applyHideState();
 }
 
 // --- Gen Table Manual Override Handlers ---
@@ -87,7 +93,6 @@ function onGenExtraInput(value) {
 function resetGenOverrides() {
     genOverrides = [null, null, null, null, null, null, null, null];
     genExtraOverride = null;
-    // Re-render gen table with auto values
     calculateGlobalStats();
 }
 
@@ -101,11 +106,9 @@ function calculateGlobalStats() {
         if (!node) return;
         totalMembers++;
         if (currentDepth > maxDepth) maxDepth = currentDepth;
-
         const r = node.rewards;
         const nodeTotal = r.referral + r.pairing_signup + r.pairing_reship + r.lucky + r.reship + r.rank + r.achievement + r.dinner;
         totalPayout += nodeTotal;
-
         if (node.level === 'L1') { cntL1++; }
         else {
             if (node.level === 'L2') { cntL2++; totalSignupRev += 150; }
@@ -121,7 +124,6 @@ function calculateGlobalStats() {
     revenueData = { signup: totalSignupRev, reship: totalReshipRev, total: totalSignupRev + totalReshipRev };
     payoutValue = totalPayout;
 
-    // --- Gen counts via sponsorMap (blood relationship), including beyond gen 8 ---
     let sponsorMap = {};
     Object.keys(nodesCache).forEach(id => {
         const node = nodesCache[id];
@@ -130,8 +132,8 @@ function calculateGlobalStats() {
             sponsorMap[node.sponsorId].push(node.id);
         }
     });
-    let genCounts = new Array(9).fill(0); // index 1-8
-    let extraCount = 0; // beyond gen 8
+    let genCounts = new Array(9).fill(0);
+    let extraCount = 0;
     let queue = [{ id: treeData.id, gen: 0 }];
     while (queue.length > 0) {
         let curr = queue.shift();
@@ -151,7 +153,6 @@ function calculateGlobalStats() {
     document.getElementById('cntL1').textContent = cntL1; document.getElementById('cntL2').textContent = cntL2;
     document.getElementById('cntL3').textContent = cntL3; document.getElementById('cntL4').textContent = cntL4;
 
-    // --- Render gen table with editable inputs ---
     const tbody = document.getElementById('genTableBody');
     tbody.innerHTML = '';
     for (let i = 1; i <= 4; i++) {
@@ -167,18 +168,15 @@ function calculateGlobalStats() {
             <td style="opacity:0.7;font-size:0.75rem;">第${leftGen}代</td>
             <td><input type="number" min="0" value="${leftVal}"
                 style="width:56px;background:transparent;border:none;border-bottom:1px solid var(--line-color);color:${leftColor};font-family:monospace;font-weight:700;font-size:0.9rem;text-align:center;outline:none;"
-                oninput="onGenInput(${leftGen}, this.value)"
-                onfocus="this.select()"></td>
+                oninput="onGenInput(${leftGen}, this.value)" onfocus="this.select()"></td>
             <td style="opacity:0.7;font-size:0.75rem;">第${rightGen}代</td>
             <td><input type="number" min="0" value="${rightVal}"
                 style="width:56px;background:transparent;border:none;border-bottom:1px solid var(--line-color);color:${rightColor};font-family:monospace;font-weight:700;font-size:0.9rem;text-align:center;outline:none;"
-                oninput="onGenInput(${rightGen}, this.value)"
-                onfocus="this.select()"></td>
+                oninput="onGenInput(${rightGen}, this.value)" onfocus="this.select()"></td>
         `;
         tbody.appendChild(tr);
     }
 
-    // 8代以外
     const extraEl = document.getElementById('genExtra');
     if (extraEl) {
         const displayExtra = genExtraOverride !== null ? genExtraOverride : extraCount;
@@ -192,7 +190,6 @@ function calculateGlobalStats() {
 function updatePayoutDisplay() {
     const labelEl = document.getElementById('payoutLabel');
     const valEl = document.getElementById('statTotalPayout');
-
     if (showRevenue) {
         labelEl.textContent = '總公司營收 (復購 + 開店)';
         labelEl.style.color = '#f59e0b';
@@ -206,44 +203,32 @@ function updatePayoutDisplay() {
     }
 }
 
-// Payout Box Long Press (Hidden Easter Egg)
+// Payout Box Long Press
 const payoutBox = document.getElementById('payoutBox');
 const progress = document.getElementById('holdProgress');
 let holdDuration = 3000; let holdStartTime = 0; let holdFrame = null;
 
 function startHold(e) {
     if (e.type === 'touchstart') e.preventDefault();
-    holdStartTime = Date.now();
-    showRevenue = false;
-    updatePayoutDisplay();
-
+    holdStartTime = Date.now(); showRevenue = false; updatePayoutDisplay();
     function animate() {
         let elapsed = Date.now() - holdStartTime;
-        if (elapsed >= holdDuration) {
-            showRevenue = true;
-            updatePayoutDisplay();
-            if (navigator.vibrate) navigator.vibrate(100);
-            return;
-        }
+        if (elapsed >= holdDuration) { showRevenue = true; updatePayoutDisplay(); if (navigator.vibrate) navigator.vibrate(100); return; }
         holdFrame = requestAnimationFrame(animate);
     }
     holdFrame = requestAnimationFrame(animate);
 }
-
 function endHold() {
     cancelAnimationFrame(holdFrame);
     if(progress) progress.style.width = '0%';
-    showRevenue = false;
-    updatePayoutDisplay();
+    showRevenue = false; updatePayoutDisplay();
 }
-
 payoutBox.addEventListener('mousedown', startHold); payoutBox.addEventListener('touchstart', startHold);
 payoutBox.addEventListener('mouseup', endHold); payoutBox.addEventListener('mouseleave', endHold); payoutBox.addEventListener('touchend', endHold);
 
 // --- BONUS CALCULATION HELPERS ---
 function getNodeSignupBV(level) { if (level === 'L2') return 80; if (level === 'L3') return 500; if (level === 'L4') return 1000; return 0; }
 function getNodeReshipBV(level) { if (level === 'L1') return 0; return 40; }
-
 function getSponsorReward(level) {
     if (level === 'L2') return { cash: 16, bv: 80, card: 0 };
     if (level === 'L3') return { cash: 100, bv: 500, card: 100 };
@@ -253,89 +238,48 @@ function getSponsorReward(level) {
 function collectAllDescendants(startNode, list) { if (!startNode) return; list.push(startNode); collectAllDescendants(startNode.pathA, list); collectAllDescendants(startNode.pathB, list); }
 
 function calcRankBonus(teamCount) {
-    if (teamCount < 100) return 0;
-    if (teamCount < 300) return 100;
-    if (teamCount < 500) return 300;
-    if (teamCount < 1000) return 500;
-    const thousands = Math.floor(teamCount / 1000);
-    return Math.min(thousands * 1000, 100000);
+    if (teamCount < 100) return 0; if (teamCount < 300) return 100; if (teamCount < 500) return 300; if (teamCount < 1000) return 500;
+    const thousands = Math.floor(teamCount / 1000); return Math.min(thousands * 1000, 100000);
 }
-
 function calcAchievementBonus(teamCount) {
     const milestones = [100, 300, 500, 1000, 3000, 5000, 10000, 30000, 50000, 100000];
-    let total = 0;
-    for (const m of milestones) {
-        if (teamCount >= m) total += m * 10;
-        else break;
-    }
-    return total;
+    let total = 0; for (const m of milestones) { if (teamCount >= m) total += m * 10; else break; } return total;
 }
 
 function calculateBonuses() {
     resetRewards(treeData); nodesCache = {}; parentMap = {}; buildCache(treeData, null);
     const allNodes = Object.values(nodesCache);
-
     allNodes.forEach(node => {
         let leftNodes = []; collectAllDescendants(node.pathA, leftNodes);
         let rightNodes = []; collectAllDescendants(node.pathB, rightNodes);
-
-        node.totalBvA_signup = 0; node.totalBvA_reship = 0;
-        node.totalBvB_signup = 0; node.totalBvB_reship = 0;
-
-        leftNodes.forEach(child => {
-            if (child.level !== 'L1') {
-                node.totalBvA_signup += getNodeSignupBV(child.level);
-                node.totalBvA_reship += getNodeReshipBV(child.level);
-            }
-        });
-        rightNodes.forEach(child => {
-            if (child.level !== 'L1') {
-                node.totalBvB_signup += getNodeSignupBV(child.level);
-                node.totalBvB_reship += getNodeReshipBV(child.level);
-            }
-        });
+        node.totalBvA_signup = 0; node.totalBvA_reship = 0; node.totalBvB_signup = 0; node.totalBvB_reship = 0;
+        leftNodes.forEach(child => { if (child.level !== 'L1') { node.totalBvA_signup += getNodeSignupBV(child.level); node.totalBvA_reship += getNodeReshipBV(child.level); } });
+        rightNodes.forEach(child => { if (child.level !== 'L1') { node.totalBvB_signup += getNodeSignupBV(child.level); node.totalBvB_reship += getNodeReshipBV(child.level); } });
         node.totalBvA = node.totalBvA_signup + node.totalBvA_reship;
         node.totalBvB = node.totalBvB_signup + node.totalBvB_reship;
     });
-
     calculatePairingBonus(treeData);
-
     allNodes.forEach(node => {
-        let curr = node; let generation = 1;
-        let tempSponsor = nodesCache[curr.sponsorId];
+        let curr = node; let generation = 1; let tempSponsor = nodesCache[curr.sponsorId];
         while(tempSponsor && generation <= 8) {
-            if (generation === 1 && tempSponsor.level !== 'L1') {
-                const rw = getSponsorReward(node.level);
-                tempSponsor.rewards.referral += rw.cash;
-                tempSponsor.rewards.product += rw.card;
-            }
-            if (tempSponsor.level !== 'L1' && node.level !== 'L1') {
-                if (generation === 1) tempSponsor.rewards.reship += 16;
-                else tempSponsor.rewards.reship += 4;
-            }
+            if (generation === 1 && tempSponsor.level !== 'L1') { const rw = getSponsorReward(node.level); tempSponsor.rewards.referral += rw.cash; tempSponsor.rewards.product += rw.card; }
+            if (tempSponsor.level !== 'L1' && node.level !== 'L1') { if (generation === 1) tempSponsor.rewards.reship += 16; else tempSponsor.rewards.reship += 4; }
             const nodePairing = node.rewards.pairing_signup + node.rewards.pairing_reship;
-            if (nodePairing > 0) {
-                tempSponsor.rewards.lucky += (nodePairing * 0.1);
-                if (tempSponsor.rewards.lucky > 2000) tempSponsor.rewards.lucky = 2000;
-            }
+            if (nodePairing > 0) { tempSponsor.rewards.lucky += (nodePairing * 0.1); if (tempSponsor.rewards.lucky > 2000) tempSponsor.rewards.lucky = 2000; }
             if (tempSponsor.sponsorId) tempSponsor = nodesCache[tempSponsor.sponsorId]; else tempSponsor = null;
             generation++;
         }
     });
-
     allNodes.forEach(node => {
         let teamCount = 0; let stack = [];
         if(node.pathA) stack.push(node.pathA); if(node.pathB) stack.push(node.pathB);
         while(stack.length > 0) { let c = stack.pop(); teamCount++; if(c.pathA) stack.push(c.pathA); if(c.pathB) stack.push(c.pathB); }
-
         node.rewards.rank = calcRankBonus(teamCount);
         node.rewards.achievement = calcAchievementBonus(teamCount);
-
         let din = 0;
         if (teamCount >= 1000) din = 1200; else if (teamCount >= 500) din = 1000; else if (teamCount >= 300) din = 800; else if (teamCount >= 100) din = 600;
         node.rewards.dinner = din;
     });
-
     calculateGlobalStats(); saveData();
 }
 
@@ -345,8 +289,7 @@ function calculatePairingBonus(node) {
     node.rewards.pairing_signup = signupPair > 0 ? Math.round(signupPair * 0.15 * 100) / 100 : 0;
     const reshipPair = Math.min(node.totalBvA_reship || 0, node.totalBvB_reship || 0);
     node.rewards.pairing_reship = reshipPair > 0 ? Math.round(reshipPair * 0.15 * 100) / 100 : 0;
-    calculatePairingBonus(node.pathA);
-    calculatePairingBonus(node.pathB);
+    calculatePairingBonus(node.pathA); calculatePairingBonus(node.pathB);
 }
 
 function buildCache(node, parent) { if (!node) return; nodesCache[node.id] = node; if(parent) parentMap[node.id] = parent; buildCache(node.pathA, node); buildCache(node.pathB, node); }
@@ -361,20 +304,16 @@ function resetRewards(node) {
 function calculateAndRender(render = true) { calculateBonuses(); if(render) renderTree(false); }
 
 // --- NODE OPERATIONS ---
-
 function addNode(parentId, pathKey) {
     const parentNodeOld = document.getElementById(`card-${parentId}`);
-    let rectOld;
-    if (parentNodeOld) { rectOld = parentNodeOld.getBoundingClientRect(); }
-
+    let rectOld; if (parentNodeOld) { rectOld = parentNodeOld.getBoundingClientRect(); }
     const parent = findNode(treeData, parentId);
     if (parent) {
         parent[pathKey] = {
             id: Date.now().toString(), userID: generateUserID(), name: getRandomName(), level: 'L4',
             sponsorId: parent.id, pathA: null, pathB: null,
             rewards: initRewards(), totalBvA: 0, totalBvB: 0,
-            totalBvA_signup: 0, totalBvB_signup: 0,
-            totalBvA_reship: 0, totalBvB_reship: 0
+            totalBvA_signup: 0, totalBvB_signup: 0, totalBvA_reship: 0, totalBvB_reship: 0
         };
         calculateAndRender();
         if (rectOld) {
@@ -396,7 +335,6 @@ function updateNodeData(id, key, value) {
 }
 
 function bulkAdd(count) {
-    let added = 0;
     const possibleLevels = ['L2', 'L3', 'L4'];
     for (let i = 0; i < count; i++) {
         let allNodes = []; collectAllDescendants(treeData, allNodes);
@@ -412,7 +350,6 @@ function bulkAdd(count) {
             rewards: initRewards(), totalBvA: 0, totalBvB: 0,
             totalBvA_signup: 0, totalBvB_signup: 0, totalBvA_reship: 0, totalBvB_reship: 0
         };
-        added++;
     }
     calculateAndRender();
 }
@@ -443,19 +380,12 @@ function findNode(root, id) { if (!root) return null; if (root.id === id) return
 function findParent(root, childId) { if (!root) return null; if ((root.pathA && root.pathA.id === childId) || (root.pathB && root.pathB.id === childId)) return root; return findParent(root.pathA, childId) || findParent(root.pathB, childId); }
 
 // --- RENDERING ---
-
-function forceRepaint() {
-    panLayer.style.opacity = '0.99';
-    requestAnimationFrame(() => { panLayer.style.opacity = ''; });
-}
+function forceRepaint() { panLayer.style.opacity = '0.99'; requestAnimationFrame(() => { panLayer.style.opacity = ''; }); }
 
 function renderTree(centerView = true) {
     nodesCache = {}; parentMap = {}; buildCache(treeData, null);
     treeRootEl.innerHTML = ''; treeRootEl.appendChild(createNodeElement(treeData));
-    // Re-apply hide state after re-render
-    if (childrenHidden) {
-        document.querySelectorAll('#treeRoot .children-container').forEach(el => { el.style.display = 'none'; });
-    }
+    applyHideState();
     if (centerView) resetView();
     forceRepaint();
 }
@@ -476,6 +406,7 @@ function createNodeElement(nodeData) {
         spBtn.ontouchstart = (e) => e.stopPropagation(); spBtn.onclick = (e) => { e.stopPropagation(); openSponsorModal(nodeData.id); }; card.appendChild(spBtn);
         const spLabel = document.createElement('div'); spLabel.className = 'sponsor-label'; spLabel.textContent = `推: ${getSponsorName(nodeData.sponsorId)}`; card.appendChild(spLabel);
     }
+
     const header = document.createElement('div'); header.className = 'node-header';
     const nameInput = document.createElement('input'); nameInput.type = 'text'; nameInput.className = 'node-name-input'; nameInput.value = nodeData.name;
     nameInput.oninput = (e) => updateNodeData(nodeData.id, 'name', e.target.value); nameInput.ontouchstart = (e) => e.stopPropagation(); header.appendChild(nameInput);
@@ -487,34 +418,22 @@ function createNodeElement(nodeData) {
     card.appendChild(header);
 
     const r = nodeData.rewards;
-
     const onetimeTotal = r.referral + r.product + r.pairing_signup + r.achievement;
     if (onetimeTotal > 0) {
         const sec = document.createElement('div'); sec.className = 'bonus-section';
         sec.innerHTML = `<div class="bonus-section-title">🔔 一次性收入</div>`;
-        const addRow = (label, val, typeClass) => {
-            if (val <= 0) return;
-            sec.innerHTML += `<div class="bonus-row"><div class="bonus-label"><span class="badge ${typeClass}">${label}</span></div><span class="bonus-val">$${Math.round(val).toLocaleString()}</span></div>`;
-        };
-        addRow('直推現金', r.referral, 'b-onetime');
-        addRow('產品卡', r.product, 'b-onetime');
-        addRow('開店對碰', r.pairing_signup, 'b-onetime');
-        addRow('成就', r.achievement, 'b-onetime');
+        const addRow = (label, val, typeClass) => { if (val <= 0) return; sec.innerHTML += `<div class="bonus-row"><div class="bonus-label"><span class="badge ${typeClass}">${label}</span></div><span class="bonus-val">$${Math.round(val).toLocaleString()}</span></div>`; };
+        addRow('直推現金', r.referral, 'b-onetime'); addRow('產品卡', r.product, 'b-onetime');
+        addRow('開店對碰', r.pairing_signup, 'b-onetime'); addRow('成就', r.achievement, 'b-onetime');
         card.appendChild(sec);
     }
-
     const monthlyTotal = r.pairing_reship + r.lucky + r.reship + r.rank;
     if (monthlyTotal > 0) {
         const sec2 = document.createElement('div'); sec2.className = 'bonus-section';
         sec2.innerHTML = `<div class="bonus-section-title">📅 月收入</div>`;
-        const addRow2 = (label, val, typeClass) => {
-            if (val <= 0) return;
-            sec2.innerHTML += `<div class="bonus-row"><div class="bonus-label"><span class="badge ${typeClass}">${label}</span></div><span class="bonus-val">$${Math.round(val).toLocaleString()}</span></div>`;
-        };
-        addRow2('復購對碰', r.pairing_reship, 'b-daily');
-        addRow2('幸運', r.lucky, 'b-daily');
-        addRow2('復購', r.reship, 'b-monthly');
-        addRow2('晉級', r.rank, 'b-monthly');
+        const addRow2 = (label, val, typeClass) => { if (val <= 0) return; sec2.innerHTML += `<div class="bonus-row"><div class="bonus-label"><span class="badge ${typeClass}">${label}</span></div><span class="bonus-val">$${Math.round(val).toLocaleString()}</span></div>`; };
+        addRow2('復購對碰', r.pairing_reship, 'b-daily'); addRow2('幸運', r.lucky, 'b-daily');
+        addRow2('復購', r.reship, 'b-monthly'); addRow2('晉級', r.rank, 'b-monthly');
         card.appendChild(sec2);
     }
 
@@ -524,6 +443,25 @@ function createNodeElement(nodeData) {
         monthlyTotal > 0 ? `<div class="total-line"><span class="total-label">月收入</span><span class="total-val monthly-val">$${Math.round(monthlyTotal).toLocaleString()}</span></div>` : '',
     ].join('');
     card.appendChild(footer);
+
+    // --- BV Summary Row (shown when children are hidden) ---
+    const bvSummary = document.createElement('div');
+    bvSummary.className = 'bv-summary';
+    bvSummary.style.display = childrenHidden ? 'flex' : 'none';
+    const bvA = nodeData.totalBvA || 0;
+    const bvB = nodeData.totalBvB || 0;
+    bvSummary.innerHTML = `
+        <div class="bv-summary-side bv-side-a">
+            <span class="bv-side-label">左</span>
+            <span class="bv-side-val">${bvA.toLocaleString()} BV</span>
+        </div>
+        <div class="bv-summary-divider">|</div>
+        <div class="bv-summary-side bv-side-b">
+            <span class="bv-side-label">右</span>
+            <span class="bv-side-val">${bvB.toLocaleString()} BV</span>
+        </div>
+    `;
+    card.appendChild(bvSummary);
 
     wrapper.appendChild(card);
     const childrenContainer = document.createElement('div'); childrenContainer.className = 'children-container';
@@ -577,10 +515,7 @@ const LOD_THRESHOLD = 0.6;
 function checkLOD() { if (scale < LOD_THRESHOLD) viewport.classList.add('zoomed-out'); else viewport.classList.remove('zoomed-out'); }
 function updateTransform() {
     if (rafId) return;
-    rafId = requestAnimationFrame(() => {
-        panLayer.style.transform = `translate3d(${translateX}px, ${translateY}px, 0) scale(${scale})`;
-        rafId = null;
-    });
+    rafId = requestAnimationFrame(() => { panLayer.style.transform = `translate3d(${translateX}px, ${translateY}px, 0) scale(${scale})`; rafId = null; });
 }
 function handleTripleClick() {
     clickCount++; if (clickCount === 1) { clickTimer = setTimeout(() => { clickCount = 0; }, 400); }
