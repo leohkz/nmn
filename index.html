@@ -38,7 +38,6 @@
                         <span class="stat-box-label">組織深度</span>
                         <span class="stat-box-value" id="statDepth">0</span>
                     </div>
-                    <!-- 長按功能 -->
                     <div class="stat-box" id="payoutBox" style="cursor: pointer; position: relative; overflow: hidden;">
                         <span class="stat-box-label" id="payoutLabel">總發放獎金</span>
                         <span class="stat-box-value" id="statTotalPayout" style="color: #10b981;">$0</span>
@@ -58,11 +57,23 @@
 
                 <div class="stats-section-header">
                     <div class="stats-section-title">代數統計 (血緣關係)</div>
+                    <div style="font-size:0.65rem;opacity:0.5;cursor:pointer" onclick="resetGenOverrides()" title="重置手動輸入">↺ 重置</div>
                 </div>
                 <div style="background: var(--bg-color); border-radius: 8px; padding: 0 10px;">
-                    <table class="gen-table">
-                        <thead><tr><th width="30%">代數</th><th>人數</th><th width="30%">代數</th><th>人數</th></tr></thead>
+                    <table class="gen-table" id="genTable">
+                        <thead><tr><th width="22%">代數</th><th>人數</th><th width="22%">代數</th><th>人數</th></tr></thead>
                         <tbody id="genTableBody"></tbody>
+                        <tfoot>
+                            <tr>
+                                <td style="opacity:0.7;font-size:0.75rem;">8代外</td>
+                                <td colspan="3">
+                                    <input id="genExtra" type="number" min="0" value="0"
+                                        style="width:80px;background:transparent;border:none;border-bottom:1px solid var(--line-color);color:var(--btn-primary);font-family:monospace;font-weight:700;font-size:0.9rem;text-align:center;outline:none;"
+                                        oninput="onGenExtraInput(this.value)">
+                                    <span style="font-size:0.7rem;opacity:0.5;"> 人</span>
+                                </td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
 
@@ -71,6 +82,9 @@
                     <div class="save-indicator" id="saveIndicator"></div>
                 </div>
                 
+                <!-- 隱藏下線按鈕 -->
+                <div class="control-btn" id="hideChildrenBtn" onclick="toggleHideChildren()" style="margin-bottom: 10px;">🌲 顯示所有下線</div>
+
                 <div class="bulk-grid">
                     <div class="control-btn small" onclick="bulkAdd(10)">+10</div>
                     <div class="control-btn small" onclick="bulkAdd(50)">+50</div>
@@ -89,7 +103,6 @@
                 <div class="control-btn" id="bonusDetailBtn" onclick="toggleBonusDetails()" style="margin-top: 10px;">📖 獎金制度詳解</div>
                 <div class="author-credit">Made by Leoz · 2026</div>
 
-                <!-- 完整無刪減的制度說明 -->
                 <div id="bonusInfoBlock" class="info-block" style="margin-top: 16px; border-top: 1px dashed var(--line-color); padding-top: 10px;">
                     <h4>1️⃣ 會員等級與權益</h4>
                     <div class="table-scroll-wrapper">

@@ -12,6 +12,14 @@ let showRevenue = false;
 let revenueData = { signup: 0, reship: 0, total: 0 };
 let payoutValue = 0;
 
+// --- Gen Table Manual Override ---
+// genOverrides[i] = number if manually set, null if auto
+let genOverrides = [null, null, null, null, null, null, null, null]; // index 0 = gen1 ... index 7 = gen8
+let genExtraOverride = null; // 8代以外手動值
+
+// --- Hide Children State ---
+let childrenHidden = false;
+
 // --- Initialization ---
 function initData() {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -51,6 +59,38 @@ function toggleBonusDetails() {
     if(block.classList.contains('show')) { setTimeout(() => { block.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100); }
 }
 
+// --- Hide / Show Children ---
+function toggleHideChildren() {
+    childrenHidden = !childrenHidden;
+    const btn = document.getElementById('hideChildrenBtn');
+    if (childrenHidden) {
+        btn.textContent = '🙈 隱藏所有下線';
+        btn.classList.add('active');
+        // 隱藏 treeRoot 下所有 children-container
+        document.querySelectorAll('#treeRoot .children-container').forEach(el => { el.style.display = 'none'; });
+    } else {
+        btn.textContent = '🌲 顯示所有下線';
+        btn.classList.remove('active');
+        document.querySelectorAll('#treeRoot .children-container').forEach(el => { el.style.display = ''; });
+    }
+}
+
+// --- Gen Table Manual Override Handlers ---
+function onGenInput(gen, value) {
+    const v = value === '' ? null : parseInt(value);
+    genOverrides[gen - 1] = (v === null || isNaN(v)) ? null : v;
+}
+function onGenExtraInput(value) {
+    const v = value === '' ? null : parseInt(value);
+    genExtraOverride = (v === null || isNaN(v)) ? null : v;
+}
+function resetGenOverrides() {
+    genOverrides = [null, null, null, null, null, null, null, null];
+    genExtraOverride = null;
+    // Re-render gen table with auto values
+    calculateGlobalStats();
+}
+
 // --- CALCULATION LOGIC ---
 function calculateGlobalStats() {
     let totalMembers = 0; let maxDepth = 0; let totalPayout = 0;
@@ -81,16 +121,26 @@ function calculateGlobalStats() {
     revenueData = { signup: totalSignupRev, reship: totalReshipRev, total: totalSignupRev + totalReshipRev };
     payoutValue = totalPayout;
 
-    let sponsorMap = {}; let allNodeIds = Object.keys(nodesCache);
-    allNodeIds.forEach(id => {
+    // --- Gen counts via sponsorMap (blood relationship), including beyond gen 8 ---
+    let sponsorMap = {};
+    Object.keys(nodesCache).forEach(id => {
         const node = nodesCache[id];
-        if (node.sponsorId) { if (!sponsorMap[node.sponsorId]) sponsorMap[node.sponsorId] = []; sponsorMap[node.sponsorId].push(node.id); }
+        if (node.sponsorId) {
+            if (!sponsorMap[node.sponsorId]) sponsorMap[node.sponsorId] = [];
+            sponsorMap[node.sponsorId].push(node.id);
+        }
     });
-    let genCounts = [0, 0, 0, 0, 0, 0, 0, 0, 0]; let queue = [{ id: treeData.id, gen: 0 }];
+    let genCounts = new Array(9).fill(0); // index 1-8
+    let extraCount = 0; // beyond gen 8
+    let queue = [{ id: treeData.id, gen: 0 }];
     while (queue.length > 0) {
         let curr = queue.shift();
-        if (curr.gen > 0 && curr.gen <= 8) genCounts[curr.gen]++;
-        if (curr.gen < 8) { let recruits = sponsorMap[curr.id] || []; recruits.forEach(childId => { queue.push({ id: childId, gen: curr.gen + 1 }); }); }
+        if (curr.gen > 0) {
+            if (curr.gen <= 8) genCounts[curr.gen]++;
+            else extraCount++;
+        }
+        let recruits = sponsorMap[curr.id] || [];
+        recruits.forEach(childId => { queue.push({ id: childId, gen: curr.gen + 1 }); });
     }
 
     document.getElementById('statCount').textContent = totalMembers;
@@ -101,14 +151,41 @@ function calculateGlobalStats() {
     document.getElementById('cntL1').textContent = cntL1; document.getElementById('cntL2').textContent = cntL2;
     document.getElementById('cntL3').textContent = cntL3; document.getElementById('cntL4').textContent = cntL4;
 
-    const tbody = document.getElementById('genTableBody'); tbody.innerHTML = '';
+    // --- Render gen table with editable inputs ---
+    const tbody = document.getElementById('genTableBody');
+    tbody.innerHTML = '';
     for (let i = 1; i <= 4; i++) {
         const tr = document.createElement('tr');
         const leftGen = i; const rightGen = i + 4;
-        const leftCount = genCounts[leftGen] || 0; const rightCount = genCounts[rightGen] || 0;
-        tr.innerHTML = `<td>第 ${leftGen} 代</td><td style="color:${leftCount>0?'var(--btn-primary)':'inherit'}">${leftCount}</td><td>第 ${rightGen} 代</td><td style="color:${rightCount>0?'var(--btn-primary)':'inherit'}">${rightCount}</td>`;
+        const leftAuto = genCounts[leftGen] || 0;
+        const rightAuto = genCounts[rightGen] || 0;
+        const leftVal = genOverrides[leftGen - 1] !== null ? genOverrides[leftGen - 1] : leftAuto;
+        const rightVal = genOverrides[rightGen - 1] !== null ? genOverrides[rightGen - 1] : rightAuto;
+        const leftColor = leftVal > 0 ? 'var(--btn-primary)' : 'inherit';
+        const rightColor = rightVal > 0 ? 'var(--btn-primary)' : 'inherit';
+        tr.innerHTML = `
+            <td style="opacity:0.7;font-size:0.75rem;">第${leftGen}代</td>
+            <td><input type="number" min="0" value="${leftVal}"
+                style="width:56px;background:transparent;border:none;border-bottom:1px solid var(--line-color);color:${leftColor};font-family:monospace;font-weight:700;font-size:0.9rem;text-align:center;outline:none;"
+                oninput="onGenInput(${leftGen}, this.value)"
+                onfocus="this.select()"></td>
+            <td style="opacity:0.7;font-size:0.75rem;">第${rightGen}代</td>
+            <td><input type="number" min="0" value="${rightVal}"
+                style="width:56px;background:transparent;border:none;border-bottom:1px solid var(--line-color);color:${rightColor};font-family:monospace;font-weight:700;font-size:0.9rem;text-align:center;outline:none;"
+                oninput="onGenInput(${rightGen}, this.value)"
+                onfocus="this.select()"></td>
+        `;
         tbody.appendChild(tr);
     }
+
+    // 8代以外
+    const extraEl = document.getElementById('genExtra');
+    if (extraEl) {
+        const displayExtra = genExtraOverride !== null ? genExtraOverride : extraCount;
+        extraEl.value = displayExtra;
+        extraEl.style.color = displayExtra > 0 ? 'var(--btn-primary)' : 'inherit';
+    }
+
     updatePayoutDisplay();
 }
 
@@ -375,6 +452,10 @@ function forceRepaint() {
 function renderTree(centerView = true) {
     nodesCache = {}; parentMap = {}; buildCache(treeData, null);
     treeRootEl.innerHTML = ''; treeRootEl.appendChild(createNodeElement(treeData));
+    // Re-apply hide state after re-render
+    if (childrenHidden) {
+        document.querySelectorAll('#treeRoot .children-container').forEach(el => { el.style.display = 'none'; });
+    }
     if (centerView) resetView();
     forceRepaint();
 }
@@ -407,8 +488,6 @@ function createNodeElement(nodeData) {
 
     const r = nodeData.rewards;
 
-    // --- 一次性收入區塊 ---
-    // 包含：直推現金、產品卡、開店對碰、成就獎
     const onetimeTotal = r.referral + r.product + r.pairing_signup + r.achievement;
     if (onetimeTotal > 0) {
         const sec = document.createElement('div'); sec.className = 'bonus-section';
@@ -424,8 +503,6 @@ function createNodeElement(nodeData) {
         card.appendChild(sec);
     }
 
-    // --- 月收入區塊 ---
-    // 包含：復購對碰、幸運獎、復購獎、晉級獎
     const monthlyTotal = r.pairing_reship + r.lucky + r.reship + r.rank;
     if (monthlyTotal > 0) {
         const sec2 = document.createElement('div'); sec2.className = 'bonus-section';
@@ -441,7 +518,6 @@ function createNodeElement(nodeData) {
         card.appendChild(sec2);
     }
 
-    // --- 總獎金 Footer：拆成一次性 + 月收入兩行 ---
     const footer = document.createElement('div'); footer.className = 'total-row total-split';
     footer.innerHTML = [
         onetimeTotal > 0 ? `<div class="total-line"><span class="total-label">一次性</span><span class="total-val onetime-val">$${Math.round(onetimeTotal).toLocaleString()}</span></div>` : '',
